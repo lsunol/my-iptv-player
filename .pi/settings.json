@@ -1,0 +1,51 @@
+{
+  "defaultProvider": "openrouter",
+  "defaultModel": "openrouter/deepseek/deepseek-v4-pro",
+  "defaultThinkingLevel": "medium",
+  "packages": [
+    "npm:pi-subagents",
+    "npm:pi-web-access"
+  ],
+  "subagents": {
+    "defaultProvider": "openrouter",
+    "defaultModel": "openrouter/deepseek/deepseek-v4-pro",
+    "defaultThinking": "medium",
+    "maxThinking": "xhigh",
+    "toolActivation": "eager",
+    "agentOverrides": {
+      "scout": {
+        "model": "openrouter/anthropic/claude-haiku-5.5",
+        "thinking": "low",
+        "advertise": true
+      },
+      "researcher": {
+        "model": "openrouter/google/gemini-2.5-flash",
+        "thinking": "medium",
+        "advertise": true
+      },
+      "worker": {
+        "model": "openrouter/anthropic/claude-sonnet-5.5",
+        "thinking": "medium"
+      },
+      "reviewer": {
+        "model": "openrouter/anthropic/claude-sonnet-5.5",
+        "thinking": "high",
+        "advertise": true
+      },
+      "oracle": {
+        "model": "openrouter/anthropic/claude-opus-5.5",
+        "thinking": "high",
+        "advertise": true
+      },
+      "delegate": {
+        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "thinking": "medium",
+        "advertise": true
+      },
+      "evidence-auditor": {
+        "model": "openrouter/google/gemini-2.5-flash",
+        "thinking": "low"
+      }
+    }
+  }
+}

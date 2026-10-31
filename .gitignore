@@ -1,0 +1,44 @@
+# --- IPTV credentials / personal data (never commit) ---
+local/
+*.url
+*.m3u8.url
+*.m3u
+*.m3u8
+!samples/**/*.m3u
+!samples/**/*.m3u8
+!app/src/test/resources/**/*.m3u
+!app/src/test/resources/**/*.m3u8
+*.apk
+*.aab
+keystore.properties
+*.jks
+*.keystore
+*.p12
+signing/
+
+# --- Android / Gradle ---
+.gradle/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.iml
+.idea/
+*.hprof
+lint-results*.html
+lint-results*.xml
+
+# --- OS / editors ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.swp
+
+# --- Pi local state ---
+.pi/cache/
+
+# --- Pi project package installs (generated) ---
+.pi/npm/
