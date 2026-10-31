@@ -90,6 +90,8 @@ wireless debugging (`adb pair` + `adb connect`).
 ```text
 .
 ├── AGENTS.md                 # project rules for Pi agents
+├── CHANGELOG.md              # release notes
+├── LICENSE                   # GPLv3
 ├── .pi/
 │   ├── settings.json         # model routing, packages, subagent config
 │   ├── agents/               # android-architect, android-dev, iptv-engineer,
