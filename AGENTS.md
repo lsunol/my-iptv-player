@@ -22,6 +22,9 @@ In scope:
 - Search by channel name (case/accent-insensitive), scoped to the active tab,
   with an explicit "search all" toggle.
 - Group filter (e.g. `ES - FUTBOL`, `ESPAÑA - Drama`).
+- Per-category favorites (Live/Movies/Series/All), persisted on-device.
+- Provider-supplied `tvg-logo` images with a generated initial fallback. No brand
+  logos are bundled in the APK or repository.
 - Playback with Media3 ExoPlayer (HLS `.m3u8` and MPEG-TS `.ts`).
 - Human-readable errors for: invalid URL, timeout, HTTP 401/403/404/5xx,
   empty playlist, malformed entries, unsupported stream, playback failure.
@@ -42,6 +45,8 @@ In scope:
 Out of scope for v1 (unless the user explicitly asks):
 
 - EPG/XMLTV, catch-up, recording, Chromecast, PiP, Android TV, downloads.
+  EPG and radio overlay are researched in `docs/FEATURE_RESEARCH.md` and planned
+  in `docs/ROADMAP.md`; they are not v1 scope.
 - Multiple playlists/profiles, cloud sync, accounts, recommendations.
 - DRM, subtitles, audio track UI, per-channel HTTP headers.
 - Room, Hilt/Koin, WorkManager, Firebase, analytics, crash reporting.
@@ -190,6 +195,7 @@ one-line edits.
 | Playlist / player | `iptv-engineer` | parser, search, Media3 integration |
 | Build / sign / install | `apk-smith` | APK path, SHA-256, install result |
 | Review | `qa-reviewer` | findings by severity, pass/fail |
+| Brand / logo | `brand-designer` | generated logo concepts, chosen asset, brief |
 | Risky decision | builtin `oracle` | second opinion (explicit use only) |
 
 Recommended loop:
@@ -209,20 +215,23 @@ Rules:
 
 ## Model routing
 
-Project defaults live in `.pi/settings.json`. Prices are approximate OpenRouter
-USD per 1M tokens at setup time; verify before relying on them.
+Project defaults live in `.pi/settings.json`. These are the roles the harness
+uses; prices change, so check OpenRouter before budgeting.
 
 | Role | Model | Thinking | Why |
 |---|---|---|---|
-| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | cheap orchestrator (~$0.71/$1.42) |
-| `scout` | `openrouter/anthropic/claude-haiku-5.5` | low | fast recon (~$0.10/$0.50) |
-| `researcher` | `openrouter/google/gemini-2.5-flash` | medium | web synthesis (~$0.30/$2.50) |
-| `android-architect` | `openrouter/anthropic/claude-sonnet-5.5` | high | judgment (~$2/$10) |
+| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | cheap orchestrator |
+| `scout` | `openrouter/anthropic/claude-haiku-5.5` | low | fast recon |
+| `researcher` | `openrouter/google/gemini-2.5-flash` | medium | web synthesis |
+| `android-architect` | `openrouter/anthropic/claude-sonnet-5.5` | high | judgment, plan |
 | `android-dev` | `openrouter/anthropic/claude-sonnet-5.5` | medium | Kotlin/Compose quality |
 | `iptv-engineer` | `openrouter/anthropic/claude-sonnet-5.5` | high | correctness-critical parsing |
 | `apk-smith` | `openrouter/deepseek/deepseek-v4-pro` | high | mechanical build loop, cheap |
 | `qa-reviewer` | `openrouter/anthropic/claude-sonnet-5.5` | high | independent review |
+| `brand-designer` | `openrouter/anthropic/claude-sonnet-5.5` | high | visual identity, image evaluation |
 | `reviewer` (builtin) | `openrouter/anthropic/claude-sonnet-5.5` | high | independent review |
+| `worker` (builtin) | `openrouter/anthropic/claude-sonnet-5.5` | medium | generic implementation |
+| `delegate` (builtin) | `openrouter/deepseek/deepseek-v4-pro` | medium | lightweight delegate |
 | `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | expensive, explicit use only |
 
 Escalation examples:
@@ -255,6 +264,7 @@ Project skills:
 | `media3-hls` | ExoPlayer, HLS/TS, headers, lifecycle, errors |
 | `android-apk` | Gradle build, signing, verification, adb install |
 | `stream-probe` | CLI probe for playlists/HLS/TS endpoints |
+| `logo-generation` | OpenRouter image API, logo prompt rules, adaptive-icon specs |
 
 Read the matching skill before touching that area. Project skills live in
 `.pi/skills/`; global skills live in `~/.pi/agent/skills/`.

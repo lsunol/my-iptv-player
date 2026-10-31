@@ -2,6 +2,7 @@ package app.opentv.ui.playlist
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,13 +30,15 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -70,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -113,6 +117,8 @@ fun PlaylistScreen(
     onSearchAllChange: (Boolean) -> Unit,
     onGroupChange: (String?) -> Unit,
     onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
+    onShowFavorites: () -> Unit,
     onShowUrlEditor: () -> Unit,
     onCancelUrlEditor: () -> Unit,
     onClearError: () -> Unit
@@ -126,6 +132,7 @@ fun PlaylistScreen(
                 state = state,
                 showEditor = showEditor,
                 onRefresh = onRefresh,
+                onShowFavorites = onShowFavorites,
                 onShowUrlEditor = onShowUrlEditor
             )
         }
@@ -151,6 +158,7 @@ fun PlaylistScreen(
                     onSearchAllChange = onSearchAllChange,
                     onGroupChange = onGroupChange,
                     onPlay = onPlay,
+                    onToggleFavorite = onToggleFavorite,
                     onRetry = onRetry
                 )
             }
@@ -164,6 +172,7 @@ private fun AppHeader(
     state: UiState,
     showEditor: Boolean,
     onRefresh: () -> Unit,
+    onShowFavorites: () -> Unit,
     onShowUrlEditor: () -> Unit
 ) {
     val subtitle = if (state.playlist == null) {
@@ -184,27 +193,13 @@ private fun AppHeader(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
+                Image(
+                    painter = painterResource(R.drawable.logo_mark),
+                    contentDescription = null,
                     modifier = Modifier
                         .size(38.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.secondary
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                )
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
@@ -223,6 +218,21 @@ private fun AppHeader(
         },
         actions = {
             if (state.playlist != null && !showEditor) {
+                IconButton(onClick = onShowFavorites) {
+                    Icon(
+                        imageVector = if (state.favoriteKeys.isEmpty()) {
+                            Icons.Default.StarBorder
+                        } else {
+                            Icons.Default.Star
+                        },
+                        contentDescription = stringResource(R.string.favorites),
+                        tint = if (state.favoriteKeys.isEmpty()) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
                 IconButton(
                     onClick = onRefresh,
                     enabled = !state.isLoading
@@ -274,27 +284,13 @@ private fun UrlEntry(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Spacer(Modifier.height(8.dp))
-        Box(
+        Image(
+            painter = painterResource(R.drawable.logo_mark),
+            contentDescription = null,
             modifier = Modifier
                 .size(64.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(36.dp)
-            )
-        }
+        )
 
         Text(
             text = stringResource(R.string.no_playlist_title),
@@ -499,6 +495,7 @@ private fun PlaylistContent(
     onSearchAllChange: (Boolean) -> Unit,
     onGroupChange: (String?) -> Unit,
     onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
     onRetry: () -> Unit
 ) {
     val playlist = state.playlist ?: return
@@ -545,7 +542,12 @@ private fun PlaylistContent(
                     key = { it.id },
                     contentType = { it.sourceType }
                 ) { channel ->
-                    ChannelRow(channel = channel, onClick = { onPlay(channel) })
+                    ChannelRow(
+                        channel = channel,
+                        isFavorite = channel.favoriteKey in state.favoriteKeys,
+                        onClick = { onPlay(channel) },
+                        onToggleFavorite = { onToggleFavorite(channel) }
+                    )
                 }
                 item { Spacer(Modifier.height(16.dp)) }
             }
@@ -909,7 +911,12 @@ private fun EmptyState(state: UiState) {
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
+private fun ChannelRow(
+    channel: Channel,
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
     val displayName = cleanChannelName(channel.name)
     Row(
         modifier = Modifier
@@ -955,19 +962,25 @@ private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
             }
         }
 
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
+        Spacer(Modifier.width(4.dp))
+        IconButton(
+            onClick = onToggleFavorite,
+            modifier = Modifier.size(40.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = stringResource(R.string.play),
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
+                imageVector = if (isFavorite) {
+                    Icons.Default.Star
+                } else {
+                    Icons.Default.StarBorder
+                },
+                contentDescription = stringResource(
+                    if (isFavorite) R.string.remove_favorite else R.string.add_favorite
+                ),
+                tint = if (isFavorite) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
             )
         }
     }
@@ -1078,4 +1091,170 @@ private fun formatBytes(bytes: Long): String {
     val mb = bytes / 1_000_000.0
     return if (mb >= 1.0) String.format(Locale.getDefault(), "%.1f MB", mb)
     else "${bytes / 1000} KB"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FavoritesScreen(
+    state: UiState,
+    onBack: () -> Unit,
+    onTabChange: (SourceType?) -> Unit,
+    onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit
+) {
+    val favorites = state.favorites
+    val filtered = when (val tab = state.tab) {
+        null -> favorites
+        else -> favorites.filter { it.sourceType == tab }
+    }
+
+    BackHandler { onBack() }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.favorites),
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.favorites_count,
+                                formatNumber(favorites.size)
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        }
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            FavoritePills(
+                favorites = favorites,
+                selected = state.tab,
+                onTabChange = onTabChange
+            )
+
+            if (filtered.isEmpty()) {
+                FavoritesEmptyState()
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(
+                        items = filtered,
+                        key = { it.id },
+                        contentType = { it.sourceType }
+                    ) { channel ->
+                        ChannelRow(
+                            channel = channel,
+                            isFavorite = true,
+                            onClick = { onPlay(channel) },
+                            onToggleFavorite = { onToggleFavorite(channel) }
+                        )
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoritePills(
+    favorites: List<Channel>,
+    selected: SourceType?,
+    onTabChange: (SourceType?) -> Unit
+) {
+    val tabs = listOf(
+        TabSpec(
+            type = SourceType.LIVE,
+            label = stringResource(R.string.tab_live),
+            count = favorites.count { it.sourceType == SourceType.LIVE }
+        ),
+        TabSpec(
+            type = SourceType.MOVIE,
+            label = stringResource(R.string.tab_movies),
+            count = favorites.count { it.sourceType == SourceType.MOVIE }
+        ),
+        TabSpec(
+            type = SourceType.SERIES,
+            label = stringResource(R.string.tab_series),
+            count = favorites.count { it.sourceType == SourceType.SERIES }
+        ),
+        TabSpec(
+            type = null,
+            label = stringResource(R.string.tab_all),
+            count = favorites.size
+        )
+    )
+
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(items = tabs, key = { it.type?.name ?: "all" }) { tab ->
+            Pill(
+                label = tab.label,
+                count = tab.count,
+                selected = selected == tab.type,
+                onClick = { onTabChange(tab.type) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FavoritesEmptyState() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.StarBorder,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.favorites_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

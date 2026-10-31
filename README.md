@@ -17,6 +17,9 @@ The APK is a debug build for personal sideloading.
    malformed playlist, unsupported codec.
 6. Keep the last working list on disk; opening the app does not re-download it.
    **Actualizar** refreshes it, and a failed refresh keeps the old list.
+7. Mark channels as favorites and open a per-category **Favoritos** screen.
+8. Use provider-supplied channel logos when they exist; otherwise show a
+   generated initial. No brand logos are bundled.
 
 No account, no backend, no ads, no analytics, no cloud sync.
 
@@ -59,7 +62,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 The full harness rationale, agent roster, model routing, and bootstrap commands
 are in [`docs/AGENT_SETUP.md`](docs/AGENT_SETUP.md). Project rules for agents are
-in [`AGENTS.md`](AGENTS.md).
+in [`AGENTS.md`](AGENTS.md). The feature research and backlog are in
+[`docs/FEATURE_RESEARCH.md`](docs/FEATURE_RESEARCH.md) and
+[`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Install on your phone
 
@@ -87,13 +92,18 @@ wireless debugging (`adb pair` + `adb connect`).
 ├── .pi/
 │   ├── settings.json         # model routing, packages, subagent config
 │   ├── agents/               # android-architect, android-dev, iptv-engineer,
-│   │                         # apk-smith, qa-reviewer
+│   │                         # apk-smith, qa-reviewer, brand-designer
 │   └── skills/
 │       ├── iptv-playlists/   # M3U/Xtream parsing and search
 │       ├── media3-hls/       # ExoPlayer, HLS/TS, lifecycle
 │       ├── android-apk/      # build, sign, verify, install
-│       └── stream-probe/     # probe.mjs CLI
+│       ├── stream-probe/     # probe.mjs CLI
+│       └── logo-generation/  # OpenRouter image logo workflow
 ├── docs/AGENT_SETUP.md       # why this harness, how to reproduce it
+├── docs/FEATURE_RESEARCH.md  # EPG, radio, logos, favorites research
+├── docs/ROADMAP.md           # done, next and discarded features
+├── design/                   # generated logo concepts and brief
+├── tools/generate-logo.mjs   # OpenRouter image generator
 ├── local/                    # optional local playlists (git-ignored)
 └── samples/                  # public test streams only
 ```

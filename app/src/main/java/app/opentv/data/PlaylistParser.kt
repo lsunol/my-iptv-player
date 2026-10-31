@@ -93,7 +93,8 @@ object PlaylistParser {
                                 searchKey = SearchNormalizer.key(
                                     "${entry.name} ${entry.tvgName.orEmpty()} ${entry.group.orEmpty()}"
                                 ),
-                                qualityTag = quality.find(entry.name)?.value?.uppercase(Locale.ROOT)
+                                qualityTag = quality.find(entry.name)?.value?.uppercase(Locale.ROOT),
+                                favoriteKey = buildFavoriteKey(entry.tvgId, resolved)
                             )
                             channels += channel
                             counts[type] = (counts[type] ?: 0) + 1
@@ -193,6 +194,11 @@ object PlaylistParser {
             liveGroup.containsMatchIn(group) -> SourceType.LIVE
             else -> SourceType.OTHER
         }
+    }
+
+    private fun buildFavoriteKey(tvgId: String?, url: String): String {
+        val id = tvgId?.trim()?.lowercase(Locale.ROOT).orEmpty()
+        return if (id.isNotEmpty()) "tvg:$id" else "url:${Integer.toHexString(url.hashCode())}"
     }
 
     private fun buildId(url: String, name: String, index: Int): String =

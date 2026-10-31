@@ -27,6 +27,9 @@ class PlaylistParserTest {
         assertEquals("ES - FUTBOL", playlist.channels[0].group)
         assertEquals(SourceType.MOVIE, playlist.channels[1].sourceType)
         assertEquals(SourceType.SERIES, playlist.channels[2].sourceType)
+        assertEquals("tvg:id1", playlist.channels[0].favoriteKey)
+        assertEquals("tvg:id2", playlist.channels[1].favoriteKey)
+        assertTrue(playlist.channels[2].favoriteKey.startsWith("url:"))
         assertEquals(1, playlist.count(SourceType.LIVE))
         assertEquals(1, playlist.count(SourceType.MOVIE))
         assertEquals(1, playlist.count(SourceType.SERIES))
@@ -85,6 +88,21 @@ class PlaylistParserTest {
         assertEquals("A, B", channel.group)
         assertEquals("Canal", channel.name)
         assertEquals("http://logo/a,b.png", channel.logoUrl)
+    }
+
+    @Test
+    fun variantsWithSameTvgIdShareFavoriteKey() {
+        val m3u = """
+            #EXTM3U
+            #EXTINF:-1 tvg-id="laliga" group-title="ES - FUTBOL",M+ LaLiga FHD
+            http://host/live/u/p/1.m3u8
+            #EXTINF:-1 tvg-id="laliga" group-title="ES - FUTBOL",M+ LaLiga HEVC
+            http://host/live/u/p/2.m3u8
+        """.trimIndent()
+
+        val playlist = PlaylistParser.parse(m3u)
+
+        assertEquals(playlist.channels[0].favoriteKey, playlist.channels[1].favoriteKey)
     }
 
     @Test

@@ -16,7 +16,8 @@ data class Channel(
     val tvgId: String?,
     val sourceType: SourceType,
     val searchKey: String,
-    val qualityTag: String?
+    val qualityTag: String?,
+    val favoriteKey: String
 )
 
 data class GroupCount(

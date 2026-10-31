@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -16,8 +17,13 @@ class SettingsStore(private val context: Context) {
     private val playlistUrlKey = stringPreferencesKey("playlist_url")
     private val cacheUrlKey = stringPreferencesKey("cache_url")
     private val cacheSavedAtKey = longPreferencesKey("cache_saved_at")
+    private val favoriteKeysKey = stringSetPreferencesKey("favorite_keys")
 
     val playlistUrl: Flow<String?> = context.dataStore.data.map { it[playlistUrlKey] }
+
+    val favoriteKeys: Flow<Set<String>> = context.dataStore.data.map {
+        it[favoriteKeysKey]?.toSet() ?: emptySet()
+    }
 
     val cacheInfo: Flow<CacheInfo> = context.dataStore.data.map {
         CacheInfo(it[cacheUrlKey], it[cacheSavedAtKey])
@@ -31,6 +37,14 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit {
             it[cacheUrlKey] = url
             it[cacheSavedAtKey] = savedAt
+        }
+    }
+
+    suspend fun toggleFavorite(key: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[favoriteKeysKey]?.toMutableSet() ?: mutableSetOf()
+            if (!current.add(key)) current.remove(key)
+            prefs[favoriteKeysKey] = current
         }
     }
 }

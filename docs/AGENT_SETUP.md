@@ -5,7 +5,7 @@ This document explains the agent harness chosen for **Open IPTV** on
 
 The short version: Pi does not ship sub-agents or plan mode by default. We added
 `pi-subagents` for role-based delegation with per-agent models, `pi-web-access`
-for current Android/Media3 research, five project agents, and four project
+for current Android/Media3 research, six project agents, and five project
 skills tailored to IPTV. We deliberately avoided a Python/CrewAI stack.
 
 ## Environment at setup time
@@ -81,6 +81,7 @@ Project agents live in `.pi/agents/`. Builtins are overridden in
 | `iptv-engineer` | project | sonnet-5.5 | high | parser, search, Media3, streams |
 | `apk-smith` | project | deepseek-v4-pro | high | Gradle, APK, signing, adb |
 | `qa-reviewer` | project | sonnet-5.5 | high | read-only review and tests |
+| `brand-designer` | project | sonnet-5.5 | high | logo concepts, image generation, brand brief |
 | `scout` | builtin | haiku-5.5 | low | fast recon |
 | `researcher` | builtin | gemini-2.5-flash | medium | web research with sources |
 | `reviewer` | builtin | sonnet-5.5 | high | generic review |
@@ -132,10 +133,11 @@ npx skills add wshobson/agents --skill mobile-android-design -g -y --agent pi
 
 | Skill | Why it exists |
 |---|---|
-| `iptv-playlists` | M3U/Xtream parsing, classification, search, 33k-entry performance, redaction |
+| `iptv-playlists` | M3U/Xtream parsing, classification, search, large-list performance, redaction |
 | `media3-hls` | ExoPlayer/HLS/TS, lifecycle, error mapping, cleartext HTTP |
 | `android-apk` | verified Gradle matrix, build/sign/verify/install, troubleshooting |
 | `stream-probe` | `probe.mjs` to test a playlist/stream before blaming the app |
+| `logo-generation` | OpenRouter image API, prompt rules, adaptive-icon specs |
 
 `stream-probe` is a real tool, not just prose:
 

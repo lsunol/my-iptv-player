@@ -40,6 +40,11 @@
     <string name="cancel">Cancelar</string>
     <string name="clear">Limpiar</string>
     <string name="other">Otros</string>
+    <string name="favorites">Favoritos</string>
+    <string name="favorites_empty">Aún no tienes favoritos. Toca la estrella de un canal para añadirlo.</string>
+    <string name="add_favorite">Añadir a favoritos</string>
+    <string name="remove_favorite">Quitar de favoritos</string>
+    <string name="favorites_count">%1$s favoritos</string>
     <string name="no_playlist_title">Tu lista, sin líos</string>
     <string name="no_playlist_subtitle">Pega una URL M3U o Xtream. La lista se guarda en el móvil y se abre al instante.</string>
 </resources>

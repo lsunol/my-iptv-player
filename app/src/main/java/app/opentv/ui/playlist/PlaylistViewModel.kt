@@ -42,11 +42,15 @@ data class UiState(
     val lastUpdated: Long? = null,
     val error: String? = null,
     val selectedChannel: Channel? = null,
-    val showUrlEditor: Boolean = true
+    val showUrlEditor: Boolean = true,
+    val showFavorites: Boolean = false,
+    val favoriteKeys: Set<String> = emptySet()
 ) {
     val counts: Map<SourceType, Int> get() = playlist?.counts ?: emptyMap()
     val groups: List<GroupCount>
         get() = playlist?.groupsFor(if (searchAll) null else tab).orEmpty()
+    val favorites: List<Channel>
+        get() = playlist?.channels?.filter { it.favoriteKey in favoriteKeys }.orEmpty()
 }
 
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
@@ -62,6 +66,11 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private var filterJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            settings.favoriteKeys.collect { keys ->
+                _state.update { it.copy(favoriteKeys = keys) }
+            }
+        }
         viewModelScope.launch {
             val saved = settings.playlistUrl.first()
             if (saved.isNullOrBlank()) return@launch
@@ -209,6 +218,31 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
     fun closePlayer() {
         _state.update { it.copy(selectedChannel = null) }
+    }
+
+    fun toggleFavorite(channel: Channel) {
+        viewModelScope.launch {
+            settings.toggleFavorite(channel.favoriteKey)
+        }
+    }
+
+    fun showFavorites() {
+        _state.update { current ->
+            val favorites = current.playlist?.channels
+                ?.filter { it.favoriteKey in current.favoriteKeys }
+                .orEmpty()
+            val tab = when {
+                favorites.isEmpty() -> current.tab
+                current.tab == null -> null
+                favorites.any { it.sourceType == current.tab } -> current.tab
+                else -> null
+            }
+            current.copy(showFavorites = true, tab = tab)
+        }
+    }
+
+    fun hideFavorites() {
+        _state.update { it.copy(showFavorites = false) }
     }
 
     fun showUrlEditor() {
