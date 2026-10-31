@@ -284,9 +284,10 @@ The full matrix and re-verification commands are in
 
 - The app is scaffolded and `:app:assembleDebug` succeeds; the APK is
   `app/build/outputs/apk/debug/app-debug.apk`.
-- The package is now `app.opentv`. The previous package was exercised on a
-  physical device; the final `app.opentv` install and real-device playback are
-  pending.
+- The package is now `app.opentv`; it installs on a physical Android 16 device.
+  Favorites (star toggles, per-category tabs, persistence) and the generated
+  launcher/header mark were verified there. Android 7 and the final release
+  signing are still pending.
 - No CI workflow yet. GitHub Actions can build/test the APK and attach it to a
   release; see `docs/ROADMAP.md`.
 - The repo is public under GPLv3.

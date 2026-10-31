@@ -330,6 +330,13 @@ Read the matching skill before touching that area. Project skills live in
   `AudioTrack` player ID; no new player and no `FATAL EXCEPTION`.
 - **Back**: the player was released (`event:stopped`, `releasing player`) and the
   list returned.
+- **Favorites**: on a physical Android 16 device, starring a channel marked its
+  variants that share the same `tvg-id`, the Favorites screen showed per-category
+  tabs and counts, and favorites survived a force-stop/relaunch. Removing the
+  star removed the favorite.
+- **Logo**: the generated play-and-signal mark is used in the launcher (adaptive
+  and round icons), the header, and the URL hero; the launcher icon matches the
+  in-app mark.
 - Still unverified: Android 7 devices, all three demo streams, end-to-end search,
   and real HTTP 401/403/404 handling.
 
