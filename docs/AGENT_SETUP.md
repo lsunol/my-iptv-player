@@ -282,9 +282,11 @@ The full matrix and re-verification commands are in
 
 ## What is still missing
 
-- The app is scaffolded and `:app:assembleDebug` succeeds; the first debug APK
-  is `app/build/outputs/apk/debug/app-debug.apk`.
-- No phone was visible to `adb` during setup. `adb devices -l` must show a device
-  before claiming an install works.
-- Real-device playback and the Android 7+ path are still unverified.
-- A license (MIT recommended) and a CI workflow can come after v1.
+- The app is scaffolded and `:app:assembleDebug` succeeds; the APK is
+  `app/build/outputs/apk/debug/app-debug.apk`.
+- The package is now `app.opentv`. The previous package was exercised on a
+  physical device; the final `app.opentv` install and real-device playback are
+  pending.
+- No CI workflow yet. GitHub Actions can build/test the APK and attach it to a
+  release; see `docs/ROADMAP.md`.
+- The repo is public under GPLv3.
