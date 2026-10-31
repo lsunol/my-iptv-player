@@ -2,10 +2,10 @@
 
 A small, transparent Android IPTV player.
 
-**Status: first functional APK builds, installs, and plays.** Paste a playlist
-URL, browse Live/Movies/Series, search, and play with Media3. Tested on a
-physical Android 16 device with a large mixed playlist and a public HLS stream.
-The APK is a debug build for personal sideloading.
+**Status: functional Android player with favorites and a custom brand mark.**
+Paste a playlist URL, browse Live/Movies/Series, search, play with Media3, save
+per-category favorites, and use provider-supplied channel logos. Tested on a
+physical Android 16 device. The APK is a debug build for personal sideloading.
 
 ## What it will do
 
@@ -64,7 +64,8 @@ The full harness rationale, agent roster, model routing, and bootstrap commands
 are in [`docs/AGENT_SETUP.md`](docs/AGENT_SETUP.md). Project rules for agents are
 in [`AGENTS.md`](AGENTS.md). The feature research and backlog are in
 [`docs/FEATURE_RESEARCH.md`](docs/FEATURE_RESEARCH.md) and
-[`docs/ROADMAP.md`](docs/ROADMAP.md).
+[`docs/ROADMAP.md`](docs/ROADMAP.md). Changes are listed in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Install on your phone
 

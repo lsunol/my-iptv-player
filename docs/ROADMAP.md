@@ -14,7 +14,7 @@ is done, what is deliberately postponed, and what was discarded.
 - **Favorites** per category (Live / Movies / Series / All), stored on-device.
 - Neutral branding: a mint/violet play-and-signal mark, matching launcher icon
   and in-app header.
-- MIT/GPL-compatible dependency set; the repo is public under GPLv3.
+- Apache-2.0/MIT dependency set, compatible with the repo license (GPLv3).
 
 ## Next: EPG (low priority, do not disturb the current list screen)
 

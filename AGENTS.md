@@ -85,7 +85,8 @@ Consequences:
   `media3-datasource-okhttp`). `PlayerView` inside `AndroidView`.
 - `ViewModel` + immutable `UiState` + `StateFlow`; repository owns fetching.
 - OkHttp for playlist HTTP (disk cache, redirects, gzip, timeouts).
-- DataStore Preferences for `playlistUrl` and `lastLoadedAt`.
+- DataStore Preferences for `playlistUrl`, `lastLoadedAt`, cache metadata and the
+  small set of favorite keys. Room is reserved for future EPG/large datasets.
 - Coroutines/Flow. Parsing on `Dispatchers.IO` / `Default`, UI on Main.
 - No DI framework. Construct dependencies in `Application`/`MainActivity`.
 - No database. The parsed list is in memory; the raw playlist may be cached by
@@ -273,7 +274,8 @@ Read the matching skill before touching that area. Project skills live in
 
 - **Never** commit, print, screenshot, or paste a real playlist URL,
   username, password, token, provider host, or keystore.
-- Real playlists live in `local/` (git-ignored). Samples use public streams.
+- Keep private playlists in `local/` (git-ignored) or outside the repository.
+  Samples use public streams only.
 - Implement `redactUrl()` and use it in every log/error message. Redact
   `username`, `password`, `token`, `key`, `auth`, and URL userinfo. For Xtream
   paths such as `/live/USER/PASS/123.m3u8`, never log the full path; log host +
@@ -295,6 +297,9 @@ Read the matching skill before touching that area. Project skills live in
 - [ ] Live/Movies/Series/All tabs show correct counts.
 - [ ] A playlist with no Live entries still opens on a non-empty tab.
 - [ ] Search finds channels with accents/case differences and is debounced.
+- [ ] Favorites can be toggled, filtered by category, and survive a restart.
+- [ ] Channel logos come only from `tvg-logo`; missing logos fall back to an initial.
+- [ ] Launcher icon and in-app header use the same brand mark.
 - [ ] Tapping a live channel plays it; back stops playback and releases the player.
 - [ ] Rotating the device or changing configuration does not leak the player.
 - [ ] HTTP 401/403/404/timeout/malformed playlist produce actionable messages.

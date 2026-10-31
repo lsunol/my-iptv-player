@@ -20,14 +20,14 @@ Review in this order:
 1. **Correctness** — does the change do the requested behavior? Are Live/Movies/
    Series counts and classification right? Does search match accents/case?
 2. **Playlist edge cases** — BOM/CRLF, missing attributes, commas in names,
-   relative URLs, Latin-1, empty playlist, 33k entries, duplicate variants.
+   relative URLs, Latin-1, empty playlist, tens of thousands of entries, duplicate variants.
 3. **Playback lifecycle** — player creation/release, configuration changes,
    surface detach, back navigation, network loss, HTTP 403/timeout.
 4. **Security/privacy** — no raw URLs or credentials in logs/messages; no
    telemetry; cleartext HTTP is intentional and limited to user-supplied hosts;
    no secrets in the repo.
 5. **Performance** — no main-thread parsing/filtering; stable list keys; no
-   per-row `remember` explosions; search debounce; memory pressure on 33k items.
+   per-row `remember` explosions; search debounce; memory pressure on tens of thousands of items.
 6. **UX transparency** — loading progress, channel counts, specific error text,
    retry path, empty states.
 7. **Tests and simplicity** — are pure functions tested? Is there a simpler

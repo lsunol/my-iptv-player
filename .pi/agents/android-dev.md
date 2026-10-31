@@ -23,7 +23,7 @@ Implementation rules:
   state shared across screens. No business logic in composables.
 - Keep dependencies inside the approved baseline. Do not add a library without
   a concrete need and an explicit note in your report.
-- The playlist can have 33k entries. Never parse, sort, filter, or build rows on
+- The playlist can have tens of thousands of entries. Never parse, sort, filter, or build rows on
   the main thread. Use stable keys and simple list rows.
 - Use `stringResource`/`pluralStringResource` for user-facing text where
   practical. Keep error messages specific and actionable.

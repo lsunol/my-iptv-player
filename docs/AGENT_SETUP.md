@@ -221,15 +221,15 @@ After setup, these checks were run from inside `my-iptv-player` with
 
 | Check | Result |
 |---|---|
-| Project agent discovery | 5 project agents listed with their models |
+| Project agent discovery | 6 project agents listed with their models |
 | Real subagent launch | `scout` returned a repository summary; no edits |
 | Web research launch | `researcher` returned Media3 1.11.1 with the Google Maven URL |
-| Skill discovery | project skills `iptv-playlists`, `media3-hls`, `android-apk`, `stream-probe` visible |
+| Skill discovery | project skills `iptv-playlists`, `media3-hls`, `android-apk`, `stream-probe`, `logo-generation` visible |
 | Probe on demo playlist | 3 entries, public HLS URLs |
 | Probe on a large mixed playlist | entry totals and per-type counts reported |
 | Probe stream check | Mux master → 64-segment media playlist → first segment HTTP 206, TS sync true |
 | Secret scan | no provider host/username in committed files; `local/` ignored by git |
-| Android debug build | `./gradlew :app:assembleDebug` succeeded; APK ~16 MB |
+| Android debug build | `./gradlew :app:assembleDebug` succeeded; APK ~24 MB debug |
 | Unit tests | parser/search tests pass |
 | Large playlist parser | parser totals and classification matched the probe |
 | Device install | `adb install -r` succeeded on a physical Android 16 device |
@@ -242,11 +242,15 @@ After setup, these checks were run from inside `my-iptv-player` with
 | Fullscreen | Landscape + immersive; exit button and back restored the top bar |
 | Rotation | Same Media3 player ID after portrait -> landscape; no reconnect, no crash |
 | Back | Player stopped and released; list returned |
+| Package rename | `app.opentv` installs and launches on a physical Android 16 device |
+| Favorites | star toggle, per-category tabs/counts, shared `tvg-id` variants, persistence after force-stop |
+| Brand mark | generated mark used in adaptive/round launcher icons, header and URL hero |
+| Channel logos | provider `tvg-logo` only; missing/broken URLs fall back to the generated initial |
 
 The debug APK, unit tests, device install, large-playlist load, playback, cache,
-refresh fallback, fullscreen, rotation, and player release are verified. Android
-7 compatibility, all three demo streams, and end-to-end search are still
-unverified.
+refresh fallback, fullscreen, rotation, favorites, channel-logo fallback, brand
+mark, and player release are verified. Android 7 compatibility, all three demo
+streams, and end-to-end search are still unverified.
 
 OkHttp is pinned to 4.12.0 in the app: OkHttp 5.5.1 pulls `okhttp-android`,
 whose AAR requires compileSdk 37, which conflicts with the AGP 8.13.2 baseline.

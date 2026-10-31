@@ -197,10 +197,10 @@ UI behavior:
 
 ## Performance budgets
 
-- Parse 33k entries in under ~2 s on a mid-range phone; show progress if slower.
+- Parse tens of thousands of entries in under ~2 s on a mid-range phone; show progress if slower.
 - Do not allocate per-line regexes. Compile attribute/search regexes once.
 - Avoid `String.format` in the loop; use simple concatenation.
-- Keep `Channel` immutable and lean. 33k × ~400 B is acceptable; do not also
+- Keep `Channel` immutable and lean. tens of thousands × ~400 B is acceptable; do not also
   keep the raw multi-megabyte document after parsing.
 - The raw playlist may stay in OkHttp's disk cache, not in RAM.
 - List: `LazyColumn`, stable `key = channel.id`, `contentType = sourceType`.
@@ -255,4 +255,4 @@ Never copy the user's `local/` playlist into tests.
 - [ ] Counts and groups surfaced in the UI.
 - [ ] Parse warnings are visible, not swallowed.
 - [ ] No credential in logs, errors, or analytics.
-- [ ] 33k-entry list does not ANR, OOM, or jank the list.
+- [ ] large-entry list does not ANR, OOM, or jank the list.
