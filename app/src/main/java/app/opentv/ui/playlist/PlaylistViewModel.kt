@@ -12,7 +12,11 @@ import app.opentv.data.SettingsStore
 import app.opentv.data.model.Channel
 import app.opentv.data.model.GroupCount
 import app.opentv.data.model.Playlist
+import app.opentv.data.model.PlaylistConfig
+import app.opentv.data.model.PlaylistKind
 import app.opentv.data.model.SourceType
+import app.opentv.data.model.buildXtreamUrl
+import app.opentv.data.model.looksLikeFullXtreamUrl
 import app.opentv.data.userMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,9 +29,40 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Top-level destination: the list manager or one loaded playlist. */
+enum class Screen { LISTS, PLAYLIST }
+
+/** Validation failures of the add/edit form, mapped to text in the UI. */
+enum class ListFormError {
+    NAME_REQUIRED,
+    URL_INVALID,
+    XTREAM_INCOMPLETE,
+    SERVER_IS_FULL_URL
+}
+
+/**
+ * State of the add/edit-list form. [listId] is null while creating a list and
+ * [returnTo] remembers which screen to restore on cancel/save.
+ */
+data class ListFormState(
+    val listId: String? = null,
+    val returnTo: Screen = Screen.LISTS,
+    val name: String = "",
+    val kind: PlaylistKind = PlaylistKind.URL,
+    val url: String = "",
+    val server: String = "",
+    val username: String = "",
+    val password: String = "",
+    val error: ListFormError? = null
+) {
+    val isNew: Boolean get() = listId == null
+}
+
 data class UiState(
-    val urlInput: String = "",
-    val playlistUrl: String? = null,
+    val screen: Screen = Screen.LISTS,
+    val lists: List<PlaylistConfig> = emptyList(),
+    val activeListId: String? = null,
+    val form: ListFormState? = null,
     val playlist: Playlist? = null,
     val filteredChannels: List<Channel> = emptyList(),
     val query: String = "",
@@ -42,7 +77,6 @@ data class UiState(
     val lastUpdated: Long? = null,
     val error: String? = null,
     val selectedChannel: Channel? = null,
-    val showUrlEditor: Boolean = true,
     val showFavorites: Boolean = false,
     val favoriteKeys: Set<String> = emptySet()
 ) {
@@ -51,6 +85,8 @@ data class UiState(
         get() = playlist?.groupsFor(if (searchAll) null else tab).orEmpty()
     val favorites: List<Channel>
         get() = playlist?.channels?.filter { it.favoriteKey in favoriteKeys }.orEmpty()
+    val activeList: PlaylistConfig?
+        get() = lists.firstOrNull { it.id == activeListId }
 }
 
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
@@ -62,6 +98,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /**
+     * Parsed playlists kept per list id so switching back to a list is instant.
+     * Owned by this ViewModel only; never shared across screens. A parsed large
+     * list costs tens of MB, so only the two most recently used are retained;
+     * anything older is re-read from its cache file when opened again.
+     */
+    private val loadedPlaylists = object : LinkedHashMap<String, Playlist>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Playlist>): Boolean =
+            size > MAX_LOADED_LISTS
+    }
+
     private var loadJob: Job? = null
     private var filterJob: Job? = null
 
@@ -72,124 +119,254 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
         }
         viewModelScope.launch {
-            val saved = settings.playlistUrl.first()
-            if (saved.isNullOrBlank()) return@launch
+            // A failed read (corrupt prefs) degrades to "no lists", never a crash.
+            val loaded = runCatching {
+                // Upgrades an existing single-playlist install before anything else.
+                val migrated = settings.migrateLegacyList()
+                if (migrated != null) {
+                    runCatching { cache.migrateLegacy(migrated.id) }
+                }
+                val lists = settings.lists.first()
+                val active = settings.activeListId.first()
+                    ?.takeIf { id -> lists.any { it.id == id } }
+                lists to (active ?: lists.firstOrNull()?.id)
+            }.getOrNull()
 
+            val lists = loaded?.first.orEmpty()
             _state.update {
-                it.copy(urlInput = saved, playlistUrl = saved, showUrlEditor = false)
-            }
-
-            val cacheInfo = settings.cacheInfo.first()
-            val cachedBytes = if (cacheInfo.url == saved) cache.read() else null
-            if (cachedBytes != null) {
-                showCached(saved, cachedBytes, cacheInfo.savedAt)
-            } else {
-                load(saved)
+                it.copy(
+                    screen = Screen.LISTS,
+                    lists = lists,
+                    activeListId = loaded?.second,
+                    form = if (lists.isEmpty()) ListFormState() else null
+                )
             }
         }
     }
 
-    fun onUrlChange(value: String) {
-        _state.update { it.copy(urlInput = value, error = null) }
-    }
+    // ---------------------------------------------------------------- lists
 
-    /**
-     * Fetches and parses a playlist. The current list is kept visible while the
-     * request runs and is only replaced on success, so a failed refresh never
-     * destroys the last working list.
-     */
-    fun load(url: String = _state.value.urlInput) {
-        val candidate = url.trim()
-        if (!candidate.startsWith("http://", ignoreCase = true) &&
-            !candidate.startsWith("https://", ignoreCase = true)
-        ) {
-            _state.update { it.copy(error = PlaylistException.InvalidUrl().userMessage()) }
+    /** Opens a list: in-memory copy, then cached copy, then the network. */
+    fun openList(listId: String) {
+        val list = _state.value.lists.firstOrNull { it.id == listId } ?: return
+        val url = list.effectiveUrl
+        if (url == null || !isHttpUrl(url)) {
+            editList(listId, ListFormError.URL_INVALID)
             return
         }
 
         loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isLoading = true,
-                    isReadingCache = false,
-                    error = null,
-                    progressBytes = 0,
-                    totalBytes = -1,
-                    parsedEntries = 0
+        filterJob?.cancel()
+        _state.update {
+            it.copy(
+                screen = Screen.PLAYLIST,
+                activeListId = list.id,
+                form = null,
+                playlist = null,
+                filteredChannels = emptyList(),
+                query = "",
+                selectedGroup = null,
+                tab = SourceType.LIVE,
+                searchAll = false,
+                isLoading = false,
+                isReadingCache = false,
+                progressBytes = 0,
+                totalBytes = -1,
+                parsedEntries = 0,
+                lastUpdated = list.lastLoadedAt,
+                error = null
+            )
+        }
+        viewModelScope.launch { runCatching { settings.setActiveList(list.id) } }
+
+        val inMemory = loadedPlaylists[list.id]
+        if (inMemory != null) {
+            loadJob = viewModelScope.launch { applyPlaylist(list, inMemory) }
+        } else {
+            loadFromCache(list, url)
+        }
+    }
+
+    fun backToLists() {
+        loadJob?.cancel()
+        _state.update { it.copy(screen = Screen.LISTS, form = null, error = null) }
+    }
+
+    fun startAddList() {
+        _state.update { it.copy(screen = Screen.LISTS, form = ListFormState()) }
+    }
+
+    fun editList(listId: String, error: ListFormError? = null) {
+        val list = _state.value.lists.firstOrNull { it.id == listId } ?: return
+        val returnTo = _state.value.screen
+        loadJob?.cancel()
+        _state.update {
+            it.copy(
+                screen = Screen.LISTS,
+                form = ListFormState(
+                    listId = list.id,
+                    returnTo = returnTo,
+                    name = list.name,
+                    kind = list.kind,
+                    url = list.url.orEmpty(),
+                    server = list.server.orEmpty(),
+                    username = list.username.orEmpty(),
+                    password = list.password.orEmpty(),
+                    error = error
+                )
+            )
+        }
+    }
+
+    fun editActiveList() {
+        _state.value.activeListId?.let { editList(it) }
+    }
+
+    fun cancelForm() {
+        val form = _state.value.form ?: return
+        _state.update { current ->
+            if (current.lists.isEmpty()) {
+                // Fresh install: the form is the only screen, just drop the error.
+                current.copy(form = form.copy(error = null))
+            } else {
+                current.copy(screen = form.returnTo, form = null)
+            }
+        }
+    }
+
+    fun setFormName(value: String) = updateForm { it.copy(name = value, error = null) }
+
+    fun setFormKind(kind: PlaylistKind) = updateForm { it.copy(kind = kind, error = null) }
+
+    fun setFormUrl(value: String) = updateForm { it.copy(url = value, error = null) }
+
+    fun setFormServer(value: String) = updateForm { it.copy(server = value, error = null) }
+
+    fun setFormUsername(value: String) = updateForm { it.copy(username = value, error = null) }
+
+    fun setFormPassword(value: String) = updateForm { it.copy(password = value, error = null) }
+
+    /** Validates and persists the form, then opens/refreshes the list. */
+    fun submitForm() {
+        val form = _state.value.form ?: return
+        val name = form.name.trim()
+        if (name.isEmpty()) {
+            updateForm { it.copy(error = ListFormError.NAME_REQUIRED) }
+            return
+        }
+
+        val candidate = when (form.kind) {
+            PlaylistKind.URL -> {
+                val url = form.url.trim()
+                if (!isHttpUrl(url)) {
+                    updateForm { it.copy(error = ListFormError.URL_INVALID) }
+                    return
+                }
+                PlaylistConfig(
+                    id = form.listId ?: PlaylistConfig.newId(),
+                    name = name,
+                    kind = PlaylistKind.URL,
+                    url = url
                 )
             }
-            try {
-                val loaded = repository.load(candidate) { bytes, total, entries ->
-                    _state.update {
-                        it.copy(
-                            progressBytes = bytes,
-                            totalBytes = total,
-                            parsedEntries = entries
-                        )
-                    }
+            PlaylistKind.XTREAM -> {
+                val server = form.server.trim()
+                if (looksLikeFullXtreamUrl(server)) {
+                    updateForm { it.copy(error = ListFormError.SERVER_IS_FULL_URL) }
+                    return
                 }
-
-                val now = System.currentTimeMillis()
-                val cacheWritten = runCatching { cache.write(loaded.rawBytes) }.isSuccess
-                runCatching { settings.savePlaylistUrl(candidate) }
-                if (cacheWritten) {
-                    runCatching { settings.saveCacheInfo(candidate, now) }
+                val username = form.username.trim()
+                if (server.isEmpty() || username.isEmpty() || form.password.isEmpty() ||
+                    buildXtreamUrl(server, username, form.password) == null
+                ) {
+                    updateForm { it.copy(error = ListFormError.XTREAM_INCOMPLETE) }
+                    return
                 }
+                PlaylistConfig(
+                    id = form.listId ?: PlaylistConfig.newId(),
+                    name = name,
+                    kind = PlaylistKind.XTREAM,
+                    server = server,
+                    username = username,
+                    password = form.password
+                )
+            }
+        }
 
-                val playlist = loaded.playlist
-                val currentTab = _state.value.tab
-                val tab = if (currentTab != null && playlist.count(currentTab) > 0) {
-                    currentTab
+        viewModelScope.launch {
+            val previous = _state.value.lists.firstOrNull { it.id == candidate.id }
+            val urlChanged = previous == null || previous.effectiveUrl != candidate.effectiveUrl
+            var saved = candidate
+            if (previous != null) {
+                saved = if (urlChanged) {
+                    // The old cache belongs to another URL; drop it.
+                    loadedPlaylists.remove(saved.id)
+                    runCatching { cache.delete(saved.id) }
+                    saved.copy(lastLoadedAt = null)
                 } else {
-                    defaultTab(playlist)
+                    saved.copy(lastLoadedAt = previous.lastLoadedAt)
                 }
-                val filtered = withContext(Dispatchers.Default) {
-                    filter(playlist, _state.value.query, tab, null, false)
-                }
-                _state.update {
-                    it.copy(
-                        playlist = playlist,
-                        playlistUrl = candidate,
-                        filteredChannels = filtered,
-                        tab = tab,
-                        selectedGroup = null,
-                        isLoading = false,
-                        isReadingCache = false,
-                        showUrlEditor = false,
-                        lastUpdated = now,
-                        error = null,
-                        progressBytes = playlist.bytes,
-                        totalBytes = playlist.bytes,
-                        parsedEntries = playlist.channels.size
-                    )
-                }
-            } catch (e: PlaylistException) {
-                _state.update { it.copy(isLoading = false, isReadingCache = false, error = e.userMessage()) }
-            } catch (e: Exception) {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        isReadingCache = false,
-                        error = "No se pudo cargar la lista: ${e.message ?: "error desconocido"}"
-                    )
-                }
+            }
+
+            runCatching { settings.upsertList(saved) }
+            runCatching { settings.setActiveList(saved.id) }
+            val lists = runCatching { settings.lists.first() }.getOrDefault(_state.value.lists)
+            _state.update {
+                it.copy(
+                    lists = lists,
+                    activeListId = saved.id,
+                    form = null,
+                    screen = form.returnTo
+                )
+            }
+
+            when {
+                previous == null -> openList(saved.id)
+                urlChanged && _state.value.screen == Screen.PLAYLIST -> openList(saved.id)
             }
         }
     }
 
-    fun refresh() {
-        val target = _state.value.playlistUrl ?: _state.value.urlInput
-        if (target.isNotBlank()) load(target)
+    fun deleteList(listId: String) {
+        viewModelScope.launch {
+            loadedPlaylists.remove(listId)
+            runCatching { cache.delete(listId) }
+            runCatching { settings.deleteList(listId) }
+            val lists = runCatching { settings.lists.first() }.getOrDefault(emptyList())
+            val wasActive = _state.value.activeListId == listId
+            if (wasActive) loadJob?.cancel()
+            _state.update { current ->
+                current.copy(
+                    lists = lists,
+                    activeListId = if (wasActive) lists.firstOrNull()?.id else current.activeListId,
+                    screen = if (wasActive) Screen.LISTS else current.screen,
+                    form = if (lists.isEmpty()) ListFormState() else null,
+                    playlist = if (wasActive) null else current.playlist,
+                    filteredChannels = if (wasActive) emptyList() else current.filteredChannels,
+                    selectedChannel = null,
+                    error = null
+                )
+            }
+        }
     }
 
-    fun retry() {
-        val target = if (_state.value.showUrlEditor) {
-            _state.value.urlInput
-        } else {
-            _state.value.playlistUrl ?: _state.value.urlInput
-        }
-        load(target)
+    // ----------------------------------------------------------- one list
+
+    /**
+     * Re-reads the active list from the network. The current list stays visible
+     * and is only replaced on success, so a failed refresh never destroys it.
+     */
+    fun refresh() {
+        val list = _state.value.activeList ?: return
+        val url = list.effectiveUrl ?: return
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { fetch(list, url) }
+    }
+
+    fun retry() = refresh()
+
+    fun clearError() {
+        _state.update { it.copy(error = null) }
     }
 
     fun setQuery(value: String) {
@@ -245,77 +422,102 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(showFavorites = false) }
     }
 
-    fun showUrlEditor() {
+    // ----------------------------------------------------------- internals
+
+    private fun updateForm(transform: (ListFormState) -> ListFormState) {
+        _state.update { current ->
+            val form = current.form ?: return@update current
+            current.copy(form = transform(form))
+        }
+    }
+
+    private fun loadFromCache(list: PlaylistConfig, url: String) {
+        loadJob = viewModelScope.launch {
+            _state.update { it.copy(isLoading = true, isReadingCache = true, error = null) }
+            val bytes = runCatching { cache.read(list.id) }.getOrNull()
+            if (bytes != null) {
+                val playlist = runCatching {
+                    withContext(Dispatchers.Default) { repository.parseCached(bytes, url) }
+                }.getOrNull()
+                if (playlist != null && playlist.channels.isNotEmpty()) {
+                    loadedPlaylists[list.id] = playlist
+                    applyPlaylist(list, playlist)
+                    return@launch
+                }
+            }
+            fetch(list, url)
+        }
+    }
+
+    private suspend fun fetch(list: PlaylistConfig, url: String) {
         _state.update {
             it.copy(
-                showUrlEditor = true,
-                urlInput = it.playlistUrl ?: it.urlInput,
-                error = null
+                isLoading = true,
+                isReadingCache = false,
+                error = null,
+                progressBytes = 0,
+                totalBytes = -1,
+                parsedEntries = 0
             )
         }
-    }
+        try {
+            val loaded = repository.load(url) { bytes, total, entries ->
+                _state.update {
+                    it.copy(
+                        progressBytes = bytes,
+                        totalBytes = total,
+                        parsedEntries = entries
+                    )
+                }
+            }
+            if (_state.value.activeListId != list.id) return
 
-    fun cancelUrlEditor() {
-        if (_state.value.playlist != null) {
+            val now = System.currentTimeMillis()
+            runCatching { cache.write(list.id, loaded.rawBytes) }
+            loadedPlaylists[list.id] = loaded.playlist
+            runCatching { settings.markLoaded(list.id, now) }
+            applyPlaylist(list.copy(lastLoadedAt = now), loaded.playlist)
+        } catch (e: PlaylistException) {
+            _state.update {
+                it.copy(isLoading = false, isReadingCache = false, error = e.userMessage())
+            }
+        } catch (e: Exception) {
             _state.update {
                 it.copy(
-                    showUrlEditor = false,
-                    urlInput = it.playlistUrl ?: it.urlInput,
-                    error = null
+                    isLoading = false,
+                    isReadingCache = false,
+                    error = "No se pudo cargar la lista: ${e.message ?: "error desconocido"}"
                 )
             }
         }
     }
 
-    fun clearError() {
-        _state.update { it.copy(error = null) }
-    }
-
-    private fun showCached(url: String, bytes: ByteArray, savedAt: Long?) {
-        viewModelScope.launch {
-            _state.update {
-                it.copy(
-                    isLoading = true,
-                    isReadingCache = true,
-                    error = null,
-                    playlistUrl = url,
-                    showUrlEditor = false
+    private suspend fun applyPlaylist(list: PlaylistConfig, playlist: Playlist) {
+        val tab = defaultTab(playlist, _state.value.tab)
+        val filtered = withContext(Dispatchers.Default) {
+            filter(playlist, _state.value.query, tab, null, false)
+        }
+        val lastUpdated = list.lastLoadedAt
+        _state.update { current ->
+            if (current.activeListId != list.id) {
+                current
+            } else {
+                current.copy(
+                    lists = current.lists.map {
+                        if (it.id == list.id) it.copy(lastLoadedAt = lastUpdated) else it
+                    },
+                    playlist = playlist,
+                    filteredChannels = filtered,
+                    tab = tab,
+                    selectedGroup = null,
+                    isLoading = false,
+                    isReadingCache = false,
+                    progressBytes = playlist.bytes,
+                    totalBytes = playlist.bytes,
+                    parsedEntries = playlist.channels.size,
+                    lastUpdated = lastUpdated,
+                    error = null
                 )
-            }
-            try {
-                val playlist = withContext(Dispatchers.Default) {
-                    repository.parseCached(bytes, url)
-                }
-                if (playlist.channels.isEmpty()) throw PlaylistException.Empty()
-                val currentTab = _state.value.tab
-                val tab = if (currentTab != null && playlist.count(currentTab) > 0) {
-                    currentTab
-                } else {
-                    defaultTab(playlist)
-                }
-                val filtered = withContext(Dispatchers.Default) {
-                    filter(playlist, _state.value.query, tab, null, false)
-                }
-                _state.update {
-                    it.copy(
-                        playlist = playlist,
-                        playlistUrl = url,
-                        filteredChannels = filtered,
-                        tab = tab,
-                        selectedGroup = null,
-                        isLoading = false,
-                        isReadingCache = false,
-                        showUrlEditor = false,
-                        lastUpdated = savedAt,
-                        error = null,
-                        progressBytes = playlist.bytes,
-                        totalBytes = playlist.bytes,
-                        parsedEntries = playlist.channels.size
-                    )
-                }
-            } catch (_: Exception) {
-                _state.update { it.copy(isLoading = false, isReadingCache = false) }
-                load(url)
             }
         }
     }
@@ -361,16 +563,31 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             .toList()
     }
 
-    private fun defaultTab(playlist: Playlist): SourceType? = when {
+    /** Keeps the current tab when it has entries, otherwise picks the first non-empty one. */
+    private fun defaultTab(playlist: Playlist, current: SourceType?): SourceType? = when {
+        current != null && playlist.count(current) > 0 -> current
         playlist.count(SourceType.LIVE) > 0 -> SourceType.LIVE
         playlist.count(SourceType.MOVIE) > 0 -> SourceType.MOVIE
         playlist.count(SourceType.SERIES) > 0 -> SourceType.SERIES
         else -> null
     }
 
+    private fun isHttpUrl(value: String): Boolean {
+        val trimmed = value.trim()
+        val hasScheme = trimmed.startsWith("http://", ignoreCase = true) ||
+            trimmed.startsWith("https://", ignoreCase = true)
+        return hasScheme && trimmed.substringAfter("://").substringBefore('/').isNotBlank()
+    }
+
     override fun onCleared() {
         loadJob?.cancel()
         filterJob?.cancel()
+        loadedPlaylists.clear()
         super.onCleared()
+    }
+
+    private companion object {
+        /** Parsed lists kept in RAM (the active one plus the previously used one). */
+        const val MAX_LOADED_LISTS = 2
     }
 }

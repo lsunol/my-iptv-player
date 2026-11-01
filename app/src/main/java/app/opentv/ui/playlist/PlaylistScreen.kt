@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,14 +32,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,8 +47,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -63,9 +57,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,11 +68,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,9 +76,9 @@ import app.opentv.R
 import app.opentv.data.model.Channel
 import app.opentv.data.model.Playlist
 import app.opentv.data.model.SourceType
-import java.text.NumberFormat
-import java.text.SimpleDateFormat
-import java.util.Date
+import app.opentv.ui.formatCompact
+import app.opentv.ui.formatNumber
+import app.opentv.ui.shortDate
 import java.util.Locale
 
 private val LiveColor = Color(0xFFF87171)
@@ -108,8 +94,7 @@ private val LogoPalette = listOf(
 @Composable
 fun PlaylistScreen(
     state: UiState,
-    onUrlChange: (String) -> Unit,
-    onLoad: () -> Unit,
+    onBackToLists: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onQueryChange: (String) -> Unit,
@@ -119,21 +104,21 @@ fun PlaylistScreen(
     onPlay: (Channel) -> Unit,
     onToggleFavorite: (Channel) -> Unit,
     onShowFavorites: () -> Unit,
-    onShowUrlEditor: () -> Unit,
-    onCancelUrlEditor: () -> Unit,
+    onEditActiveList: () -> Unit,
     onClearError: () -> Unit
 ) {
-    val showEditor = state.showUrlEditor || state.playlist == null
+    // Back returns to the lists so the user can switch playlists (requirement 2).
+    BackHandler { onBackToLists() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             AppHeader(
                 state = state,
-                showEditor = showEditor,
+                onBackToLists = onBackToLists,
                 onRefresh = onRefresh,
                 onShowFavorites = onShowFavorites,
-                onShowUrlEditor = onShowUrlEditor
+                onEditActiveList = onEditActiveList
             )
         }
     ) { padding ->
@@ -142,12 +127,11 @@ fun PlaylistScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (showEditor) {
-                UrlEntry(
+            if (state.playlist == null) {
+                ListLoadPane(
                     state = state,
-                    onUrlChange = onUrlChange,
-                    onLoad = onLoad,
-                    onCancel = if (state.playlist != null) onCancelUrlEditor else null,
+                    onRetry = onRetry,
+                    onBackToLists = onBackToLists,
                     onClearError = onClearError
                 )
             } else {
@@ -166,22 +150,70 @@ fun PlaylistScreen(
     }
 }
 
+/**
+ * Shown while a list is being read from the cache or downloaded, and when the
+ * load failed before any channel was available (including a saved list whose
+ * URL is broken). Every state is actionable: retry, or go back to the lists.
+ */
+@Composable
+private fun ListLoadPane(
+    state: UiState,
+    onRetry: () -> Unit,
+    onBackToLists: () -> Unit,
+    onClearError: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
+    ) {
+        Text(
+            text = state.activeList?.name ?: stringResource(R.string.app_name),
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Text(
+            text = stringResource(R.string.list_loading_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (state.isLoading) {
+            LoadingProgress(state)
+        }
+
+        state.error?.let { message ->
+            ErrorCard(error = message, onRetry = onRetry, onDismiss = onClearError)
+        }
+
+        TextButton(
+            onClick = onBackToLists,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
+        ) {
+            Text(stringResource(R.string.back_to_lists))
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AppHeader(
     state: UiState,
-    showEditor: Boolean,
+    onBackToLists: () -> Unit,
     onRefresh: () -> Unit,
     onShowFavorites: () -> Unit,
-    onShowUrlEditor: () -> Unit
+    onEditActiveList: () -> Unit
 ) {
-    val subtitle = if (state.playlist == null) {
-        stringResource(R.string.tagline)
-    } else {
-        val count = formatNumber(state.playlist.channels.size)
-        val base = stringResource(R.string.channels_count, count)
-        val updated = state.lastUpdated?.let { " · " + shortDate(it) }.orEmpty()
-        "$base$updated"
+    val subtitle = buildString {
+        append(state.activeList?.name ?: stringResource(R.string.tagline))
+        state.playlist?.let { playlist ->
+            append(" · ")
+            append(stringResource(R.string.channels_count, formatNumber(playlist.channels.size)))
+            state.lastUpdated?.let { append(" · " + shortDate(it)) }
+        }
     }
 
     TopAppBar(
@@ -191,6 +223,14 @@ private fun AppHeader(
             )
         ),
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+        navigationIcon = {
+            IconButton(onClick = onBackToLists) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back_to_lists)
+                )
+            }
+        },
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
@@ -217,7 +257,7 @@ private fun AppHeader(
             }
         },
         actions = {
-            if (state.playlist != null && !showEditor) {
+            if (state.playlist != null) {
                 IconButton(onClick = onShowFavorites) {
                     Icon(
                         imageVector = if (state.favoriteKeys.isEmpty()) {
@@ -250,172 +290,18 @@ private fun AppHeader(
                         )
                     }
                 }
-                IconButton(onClick = onShowUrlEditor) {
+                IconButton(
+                    onClick = onEditActiveList,
+                    enabled = state.activeList != null
+                ) {
                     Icon(
                         imageVector = Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.change_list)
+                        contentDescription = stringResource(R.string.edit_list)
                     )
                 }
             }
         }
     )
-}
-
-@Composable
-private fun UrlEntry(
-    state: UiState,
-    onUrlChange: (String) -> Unit,
-    onLoad: () -> Unit,
-    onCancel: (() -> Unit)?,
-    onClearError: () -> Unit
-) {
-    var showUrl by rememberSaveable { mutableStateOf(false) }
-
-    BackHandler(enabled = onCancel != null) {
-        onCancel?.invoke()
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        Spacer(Modifier.height(8.dp))
-        Image(
-            painter = painterResource(R.drawable.logo_mark),
-            contentDescription = null,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(20.dp))
-        )
-
-        Text(
-            text = stringResource(R.string.no_playlist_title),
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Text(
-            text = stringResource(R.string.no_playlist_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        OutlinedTextField(
-            value = state.urlInput,
-            onValueChange = onUrlChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(R.string.url_label)) },
-            placeholder = {
-                Text(
-                    text = stringResource(R.string.url_placeholder),
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            },
-            minLines = 3,
-            maxLines = 6,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Uri,
-                imeAction = ImeAction.Go
-            ),
-            keyboardActions = KeyboardActions(onGo = { onLoad() }),
-            isError = state.error != null,
-            visualTransformation = if (showUrl) {
-                VisualTransformation.None
-            } else {
-                RedactCredentialsTransformation
-            },
-            trailingIcon = {
-                IconButton(onClick = { showUrl = !showUrl }) {
-                    Icon(
-                        imageVector = if (showUrl) {
-                            Icons.Default.VisibilityOff
-                        } else {
-                            Icons.Default.Visibility
-                        },
-                        contentDescription = if (showUrl) {
-                            "Ocultar credenciales"
-                        } else {
-                            "Mostrar credenciales"
-                        }
-                    )
-                }
-            },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                cursorColor = MaterialTheme.colorScheme.primary
-            )
-        )
-
-        Button(
-            onClick = onLoad,
-            enabled = state.urlInput.isNotBlank() && !state.isLoading,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            if (state.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-                Spacer(Modifier.width(10.dp))
-            }
-            Text(
-                when {
-                    state.isReadingCache -> stringResource(R.string.loading_cache)
-                    state.isLoading -> stringResource(R.string.loading_list)
-                    else -> stringResource(R.string.load_list)
-                }
-            )
-        }
-
-        if (state.isLoading) {
-            LoadingProgress(state)
-        }
-
-        state.error?.let { error ->
-            ErrorCard(
-                error = error,
-                onRetry = onLoad,
-                onDismiss = onClearError
-            )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.Lock,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = stringResource(R.string.url_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (onCancel != null) {
-            TextButton(
-                onClick = onCancel,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
-                Text(stringResource(R.string.cancel))
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-    }
 }
 
 @Composable
@@ -1052,18 +938,6 @@ private fun typeLabel(type: SourceType): String = when (type) {
     SourceType.OTHER -> stringResource(R.string.other)
 }
 
-private object RedactCredentialsTransformation : VisualTransformation {
-    private val pattern = Regex("""(?i)(username|password|token|key|auth)=([^&\s]+)""")
-
-    override fun filter(text: AnnotatedString): TransformedText {
-        val redacted = pattern.replace(text.text) { match ->
-            val value = match.groupValues[2]
-            "${match.groupValues[1]}=" + "•".repeat(value.length)
-        }
-        return TransformedText(AnnotatedString(redacted), OffsetMapping.Identity)
-    }
-}
-
 private fun cleanChannelName(name: String): String {
     val cleaned = name.replace(Regex("""^\s*\|[^|]*\|\s*"""), "").trim()
     return cleaned.ifEmpty { name.trim() }
@@ -1073,18 +947,6 @@ private fun logoInitial(name: String): String {
     val cleaned = cleanChannelName(name)
     return cleaned.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
 }
-
-private fun formatCompact(value: Int): String = when {
-    value >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", value / 1_000_000.0)
-    value >= 1_000 -> String.format(Locale.getDefault(), "%.1fk", value / 1_000.0)
-    else -> value.toString()
-}
-
-private fun formatNumber(value: Int): String =
-    NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
-
-private fun shortDate(epochMs: Long): String =
-    SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(Date(epochMs))
 
 private fun formatBytes(bytes: Long): String {
     if (bytes <= 0) return "0 MB"
