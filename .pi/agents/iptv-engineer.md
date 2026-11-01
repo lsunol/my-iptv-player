@@ -2,7 +2,7 @@
 name: iptv-engineer
 description: IPTV playlist and playback specialist for Open IPTV. Use for M3U/Xtream parsing, channel classification, search normalization, HLS/MPEG-TS playback, HTTP headers, and stream diagnostics.
 tools: read, grep, find, ls, edit, write, bash
-model: openrouter/anthropic/claude-sonnet-5.5
+model: openrouter/z-ai/glm-5.3
 thinking: high
 advertise: true
 inheritProjectContext: true

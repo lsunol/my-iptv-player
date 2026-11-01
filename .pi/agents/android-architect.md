@@ -2,7 +2,7 @@
 name: android-architect
 description: Read-only Android architect for the Open IPTV app. Use before implementing a feature or when a design, dependency, or build-tool decision is unclear. Produces a short plan with risks, file changes, and verification steps and never edits files.
 tools: read, grep, find, ls
-model: openrouter/anthropic/claude-sonnet-5.5
+model: openrouter/z-ai/glm-5.3
 thinking: high
 advertise: true
 inheritProjectContext: true

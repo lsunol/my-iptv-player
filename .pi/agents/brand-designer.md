@@ -2,7 +2,7 @@
 name: brand-designer
 description: Visual identity and logo designer for Open IPTV. Use to generate, compare, and select app-icon concepts with the OpenRouter image API, check them at launcher size, and produce a short brand brief plus the chosen asset.
 tools: read, grep, find, ls, bash, write
-model: openrouter/anthropic/claude-sonnet-5.5
+model: openrouter/z-ai/glm-5.3
 thinking: high
 advertise: true
 inheritProjectContext: true

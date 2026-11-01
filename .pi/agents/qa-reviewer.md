@@ -2,7 +2,7 @@
 name: qa-reviewer
 description: Read-only QA and code reviewer for Open IPTV. Use after implementation or before shipping. Checks correctness, playlist edge cases, playback lifecycle, security and privacy, performance, tests, and simplicity. May run builds and tests but never edits sources.
 tools: read, grep, find, ls, bash
-model: openrouter/anthropic/claude-sonnet-5.5
+model: openrouter/z-ai/glm-5.3
 thinking: high
 advertise: true
 inheritProjectContext: true

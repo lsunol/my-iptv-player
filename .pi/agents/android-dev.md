@@ -2,7 +2,7 @@
 name: android-dev
 description: Kotlin and Jetpack Compose implementer for Open IPTV. Use for UI, state, persistence, navigation, and general app code. Writes code, adds focused tests, and runs a compile/build check.
 tools: read, grep, find, ls, edit, write, bash
-model: openrouter/anthropic/claude-sonnet-5.5
+model: openrouter/deepseek/deepseek-v4.1-flash
 thinking: medium
 advertise: true
 inheritProjectContext: true

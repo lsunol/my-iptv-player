@@ -1,6 +1,6 @@
 {
   "defaultProvider": "openrouter",
-  "defaultModel": "openrouter/deepseek/deepseek-v4-pro",
+  "defaultModel": "deepseek/deepseek-v4-pro",
   "defaultThinkingLevel": "medium",
   "packages": [
     "npm:pi-subagents",
@@ -14,21 +14,21 @@
     "toolActivation": "eager",
     "agentOverrides": {
       "scout": {
-        "model": "openrouter/anthropic/claude-haiku-5.5",
+        "model": "openrouter/z-ai/glm-5.3-flash",
         "thinking": "low",
         "advertise": true
       },
       "researcher": {
-        "model": "openrouter/google/gemini-2.5-flash",
+        "model": "openrouter/z-ai/glm-5.3-flash",
         "thinking": "medium",
         "advertise": true
       },
       "worker": {
-        "model": "openrouter/anthropic/claude-sonnet-5.5",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
         "thinking": "medium"
       },
       "reviewer": {
-        "model": "openrouter/anthropic/claude-sonnet-5.5",
+        "model": "openrouter/z-ai/glm-5.3",
         "thinking": "high",
         "advertise": true
       },
@@ -38,12 +38,12 @@
         "advertise": true
       },
       "delegate": {
-        "model": "openrouter/deepseek/deepseek-v4-pro",
+        "model": "openrouter/deepseek/deepseek-v4.1-flash",
         "thinking": "medium",
         "advertise": true
       },
       "evidence-auditor": {
-        "model": "openrouter/google/gemini-2.5-flash",
+        "model": "openrouter/z-ai/glm-5.3-flash",
         "thinking": "low"
       }
     }

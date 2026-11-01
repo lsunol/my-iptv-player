@@ -219,21 +219,30 @@ Rules:
 Project defaults live in `.pi/settings.json`. These are the roles the harness
 uses; prices change, so check OpenRouter before budgeting.
 
-| Role | Model | Thinking | Why |
-|---|---|---|---|
-| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | cheap orchestrator |
-| `scout` | `openrouter/anthropic/claude-haiku-5.5` | low | fast recon |
-| `researcher` | `openrouter/google/gemini-2.5-flash` | medium | web synthesis |
-| `android-architect` | `openrouter/anthropic/claude-sonnet-5.5` | high | judgment, plan |
-| `android-dev` | `openrouter/anthropic/claude-sonnet-5.5` | medium | Kotlin/Compose quality |
-| `iptv-engineer` | `openrouter/anthropic/claude-sonnet-5.5` | high | correctness-critical parsing |
-| `apk-smith` | `openrouter/deepseek/deepseek-v4-pro` | high | mechanical build loop, cheap |
-| `qa-reviewer` | `openrouter/anthropic/claude-sonnet-5.5` | high | independent review |
-| `brand-designer` | `openrouter/anthropic/claude-sonnet-5.5` | high | visual identity, image evaluation |
-| `reviewer` (builtin) | `openrouter/anthropic/claude-sonnet-5.5` | high | independent review |
-| `worker` (builtin) | `openrouter/anthropic/claude-sonnet-5.5` | medium | generic implementation |
-| `delegate` (builtin) | `openrouter/deepseek/deepseek-v4-pro` | medium | lightweight delegate |
-| `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | expensive, explicit use only |
+| Role | Model | Thinking | AA IQ† | Code‡ | Precio (in/out) | Why |
+|---|---|---|---|---|---|---|
+| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$1.60/$3.20 | orchestrator (routes to V4.1-Flash pricing) |
+| `scout` | `openrouter/z-ai/glm-5.3-flash` | low | 28 | 63% | ~$0.02/$0.15 | fast recon |
+| `researcher` | `openrouter/z-ai/glm-5.3-flash` | medium | 28 | 63% | ~$0.02/$0.15 | web synthesis |
+| `android-architect` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | judgment, plan |
+| `android-dev` | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | Kotlin/Compose quality |
+| `iptv-engineer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | correctness-critical parsing |
+| `apk-smith` | `openrouter/z-ai/glm-5.3-flash` | high | 28 | 63% | ~$0.02/$0.15 | mechanical build loop, cheap |
+| `qa-reviewer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
+| `brand-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | visual identity, image evaluation |
+| `reviewer` (builtin) | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
+| `worker` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | generic implementation |
+| `delegate` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | lightweight delegate |
+| `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | 58 | 74% | ~$4/$20 | expensive, explicit use only |
+
+† Artificial Analysis Intelligence Index v5.0 (0–100, general; mediana ≈ 23).
+‡ DeepSWE v1.1 (abiertos) / ChatOSS Agentic Coding Index (Opus). Orientativo.
+
+Precios OpenRouter USD/1M tokens verificados contra la API el 2026-10-31.
+Ojo: `defaultModel` (sesión principal) va SIN prefijo de proveedor
+(`deepseek/deepseek-v4-pro`); los modelos de subagentes sí llevan prefijo
+(`openrouter/z-ai/glm-5.3`). Desde 2026-09-14, `deepseek-v4-pro` redirige a
+V4.1-Flash con precio Flash hasta que salga V4.1-Pro.
 
 Escalation examples:
 
