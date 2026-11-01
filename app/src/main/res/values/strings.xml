@@ -47,4 +47,43 @@
     <string name="favorites_count">%1$s favoritos</string>
     <string name="no_playlist_title">Tu lista, sin líos</string>
     <string name="no_playlist_subtitle">Pega una URL M3U o Xtream. La lista se guarda en el móvil y se abre al instante.</string>
+
+    <!-- Mis listas -->
+    <string name="lists_title">Mis listas</string>
+    <plurals name="lists_count">
+        <item quantity="one">%1$s lista</item>
+        <item quantity="other">%1$s listas</item>
+    </plurals>
+    <string name="add_list">Añadir lista</string>
+    <string name="new_list">Nueva lista</string>
+    <string name="edit_list">Editar lista</string>
+    <string name="delete_list">Eliminar lista</string>
+    <string name="delete_list_title">¿Eliminar esta lista?</string>
+    <string name="delete_list_message">Se borrarán su configuración y los canales guardados. Los favoritos no se tocan.</string>
+    <string name="delete">Eliminar</string>
+    <string name="back_to_lists">Volver a las listas</string>
+    <string name="list_loading_subtitle">Abriendo la lista. Si ya estaba guardada no se usará la red.</string>
+    <string name="list_last_used">Última usada</string>
+    <string name="list_updated_at">Actualizada %1$s</string>
+    <string name="list_kind_url">URL</string>
+    <string name="list_kind_xtream">Xtream</string>
+    <string name="list_name_label">Nombre de la lista</string>
+    <string name="list_name_hint">Mi lista</string>
+    <string name="list_method_label">Cómo se conecta</string>
+    <string name="list_method_url">URL M3U</string>
+    <string name="list_method_xtream">Xtream</string>
+    <string name="list_form_subtitle">Ponle un nombre y elige cómo conectar con tu proveedor.</string>
+    <string name="list_privacy_help">Se guarda solo en este móvil y nunca se envía a ningún servidor.</string>
+    <string name="save_list">Guardar lista</string>
+    <string name="xtream_server_label">Servidor</string>
+    <string name="xtream_server_hint">http://proveedor.com:8080</string>
+    <string name="xtream_user_label">Usuario</string>
+    <string name="xtream_password_label">Contraseña</string>
+    <string name="xtream_help">Se usará %1$s/get.php?username=…&amp;password=…&amp;type=m3u_plus&amp;output=m3u8 (HLS).</string>
+    <string name="show_credentials">Mostrar credenciales</string>
+    <string name="hide_credentials">Ocultar credenciales</string>
+    <string name="error_list_name">Ponle un nombre a la lista.</string>
+    <string name="error_list_url">La URL no es válida. Debe empezar por http:// o https:// e incluir el servidor.</string>
+    <string name="error_xtream_incomplete">Completa el servidor, el usuario y la contraseña.</string>
+    <string name="error_xtream_server_full_url">En Servidor escribe solo la dirección (por ejemplo http://proveedor.com:8080), sin /get.php.</string>
 </resources>

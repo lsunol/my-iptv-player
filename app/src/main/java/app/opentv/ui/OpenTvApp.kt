@@ -4,10 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import app.opentv.ui.lists.ListsScreen
 import app.opentv.ui.player.PlayerScreen
 import app.opentv.ui.playlist.FavoritesScreen
 import app.opentv.ui.playlist.PlaylistScreen
 import app.opentv.ui.playlist.PlaylistViewModel
+import app.opentv.ui.playlist.Screen
 import app.opentv.ui.theme.OpenTvTheme
 
 @Composable
@@ -25,10 +27,24 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
                 onPlay = viewModel::play,
                 onToggleFavorite = viewModel::toggleFavorite
             )
+            state.screen == Screen.LISTS -> ListsScreen(
+                state = state,
+                onOpenList = viewModel::openList,
+                onAddList = viewModel::startAddList,
+                onEditList = viewModel::editList,
+                onDeleteList = viewModel::deleteList,
+                onCancelForm = viewModel::cancelForm,
+                onFormNameChange = viewModel::setFormName,
+                onFormKindChange = viewModel::setFormKind,
+                onFormUrlChange = viewModel::setFormUrl,
+                onFormServerChange = viewModel::setFormServer,
+                onFormUsernameChange = viewModel::setFormUsername,
+                onFormPasswordChange = viewModel::setFormPassword,
+                onFormSubmit = viewModel::submitForm
+            )
             else -> PlaylistScreen(
                 state = state,
-                onUrlChange = viewModel::onUrlChange,
-                onLoad = { viewModel.load() },
+                onBackToLists = viewModel::backToLists,
                 onRefresh = viewModel::refresh,
                 onRetry = viewModel::retry,
                 onQueryChange = viewModel::setQuery,
@@ -38,8 +54,7 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
                 onPlay = viewModel::play,
                 onToggleFavorite = viewModel::toggleFavorite,
                 onShowFavorites = viewModel::showFavorites,
-                onShowUrlEditor = viewModel::showUrlEditor,
-                onCancelUrlEditor = viewModel::cancelUrlEditor,
+                onEditActiveList = viewModel::editActiveList,
                 onClearError = viewModel::clearError
             )
         }
