@@ -3,16 +3,11 @@
     <string name="app_name">Open IPTV</string>
     <string name="url_label">URL de la lista</string>
     <string name="url_placeholder">https://proveedor.com/get.php?username=...&amp;password=...&amp;type=m3u_plus&amp;output=m3u8</string>
-    <string name="load_list">Cargar lista</string>
-    <string name="loading_list">Descargando lista…</string>
     <string name="loading_cache">Cargando lista guardada…</string>
     <string name="refresh">Actualizar</string>
     <string name="fullscreen">Pantalla completa</string>
     <string name="exit_fullscreen">Salir de pantalla completa</string>
     <string name="retry">Reintentar</string>
-    <string name="change_list">Cambiar lista</string>
-    <string name="change_list_short">Cambiar</string>
-    <string name="search_placeholder">Buscar canal…</string>
     <string name="search_all">Buscar en todo</string>
     <string name="all_groups">Todos</string>
     <string name="tab_live">Directos</string>
@@ -23,18 +18,8 @@
     <string name="empty_search">No hay canales que coincidan con la búsqueda.</string>
     <string name="empty_tab">No hay canales en esta pestaña.</string>
     <string name="back">Volver</string>
-    <string name="play">Reproducir</string>
-    <string name="warnings">Avisos</string>
-    <string name="channel_count">%1$d canales</string>
-    <string name="live_count">%1$d directos</string>
-    <string name="movie_count">%1$d películas</string>
-    <string name="series_count">%1$d series</string>
-    <string name="playback_error">No se pudo reproducir este canal.</string>
-    <string name="details">Detalles</string>
-    <string name="url_help">Acepta M3U, M3U8 y enlaces Xtream. La URL se guarda solo en este móvil.</string>
     <string name="tagline">Tu IPTV, simple.</string>
     <string name="search_hint">Buscar canal, grupo…</string>
-    <string name="live_badge">EN VIVO</string>
     <string name="channels_count">%1$s canales</string>
     <string name="warning_count">%1$d avisos</string>
     <string name="cancel">Cancelar</string>
@@ -45,8 +30,6 @@
     <string name="add_favorite">Añadir a favoritos</string>
     <string name="remove_favorite">Quitar de favoritos</string>
     <string name="favorites_count">%1$s favoritos</string>
-    <string name="no_playlist_title">Tu lista, sin líos</string>
-    <string name="no_playlist_subtitle">Pega una URL M3U o Xtream. La lista se guarda en el móvil y se abre al instante.</string>
 
     <!-- Mis listas -->
     <string name="lists_title">Mis listas</string>

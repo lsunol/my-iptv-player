@@ -18,9 +18,11 @@ import app.opentv.data.model.SourceType
 import app.opentv.data.model.buildXtreamUrl
 import app.opentv.data.model.looksLikeFullXtreamUrl
 import app.opentv.data.userMessage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 /** Top-level destination: the list manager or one loaded playlist. */
 enum class Screen { LISTS, PLAYLIST }
@@ -296,6 +299,10 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val previous = _state.value.lists.firstOrNull { it.id == candidate.id }
             val urlChanged = previous == null || previous.effectiveUrl != candidate.effectiveUrl
+            // Only new lists, or an edited list that was open and changed its URL,
+            // should become the active list; a mere rename must not switch to it.
+            val willOpen = previous == null ||
+                (urlChanged && _state.value.screen == Screen.PLAYLIST)
             var saved = candidate
             if (previous != null) {
                 saved = if (urlChanged) {
@@ -309,20 +316,21 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
 
             runCatching { settings.upsertList(saved) }
-            runCatching { settings.setActiveList(saved.id) }
+            if (willOpen) {
+                runCatching { settings.setActiveList(saved.id) }
+            }
             val lists = runCatching { settings.lists.first() }.getOrDefault(_state.value.lists)
             _state.update {
                 it.copy(
                     lists = lists,
-                    activeListId = saved.id,
+                    activeListId = if (willOpen) saved.id else it.activeListId,
                     form = null,
                     screen = form.returnTo
                 )
             }
 
-            when {
-                previous == null -> openList(saved.id)
-                urlChanged && _state.value.screen == Screen.PLAYLIST -> openList(saved.id)
+            if (willOpen) {
+                openList(saved.id)
             }
         }
     }
@@ -434,11 +442,33 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private fun loadFromCache(list: PlaylistConfig, url: String) {
         loadJob = viewModelScope.launch {
             _state.update { it.copy(isLoading = true, isReadingCache = true, error = null) }
-            val bytes = runCatching { cache.read(list.id) }.getOrNull()
+            var bytes = try {
+                cache.read(list.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            // A v1 cache move may not have finished in a previous run; retry it
+            // lazily so the cached list is still available without the network.
+            if (bytes == null && list.id.startsWith("legacy-")) {
+                try {
+                    cache.migrateLegacy(list.id)
+                    bytes = cache.read(list.id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Ignore: fall through to the network fetch.
+                }
+            }
             if (bytes != null) {
-                val playlist = runCatching {
+                val playlist = try {
                     withContext(Dispatchers.Default) { repository.parseCached(bytes, url) }
-                }.getOrNull()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
                 if (playlist != null && playlist.channels.isNotEmpty()) {
                     loadedPlaylists[list.id] = playlist
                     applyPlaylist(list, playlist)
@@ -460,34 +490,47 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 parsedEntries = 0
             )
         }
+        val ctx = coroutineContext
         try {
             val loaded = repository.load(url) { bytes, total, entries ->
-                _state.update {
-                    it.copy(
-                        progressBytes = bytes,
-                        totalBytes = total,
-                        parsedEntries = entries
-                    )
+                // Ignore progress from a download that was cancelled by a list switch.
+                if (ctx.isActive) {
+                    _state.update {
+                        it.copy(
+                            progressBytes = bytes,
+                            totalBytes = total,
+                            parsedEntries = entries
+                        )
+                    }
                 }
             }
-            if (_state.value.activeListId != list.id) return
 
+            // Persist the download even if the user already switched away, so the
+            // cache is warm when they come back (avoid re-downloading).
             val now = System.currentTimeMillis()
             runCatching { cache.write(list.id, loaded.rawBytes) }
             loadedPlaylists[list.id] = loaded.playlist
             runCatching { settings.markLoaded(list.id, now) }
+
+            if (_state.value.activeListId != list.id) return
             applyPlaylist(list.copy(lastLoadedAt = now), loaded.playlist)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: PlaylistException) {
-            _state.update {
-                it.copy(isLoading = false, isReadingCache = false, error = e.userMessage())
+            if (_state.value.activeListId == list.id) {
+                _state.update {
+                    it.copy(isLoading = false, isReadingCache = false, error = e.userMessage())
+                }
             }
         } catch (e: Exception) {
-            _state.update {
-                it.copy(
-                    isLoading = false,
-                    isReadingCache = false,
-                    error = "No se pudo cargar la lista: ${e.message ?: "error desconocido"}"
-                )
+            if (_state.value.activeListId == list.id) {
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        isReadingCache = false,
+                        error = "No se pudo cargar la lista."
+                    )
+                }
             }
         }
     }
