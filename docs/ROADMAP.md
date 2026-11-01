@@ -5,7 +5,9 @@ is done, what is deliberately postponed, and what was discarded.
 
 ## Done
 
-- One playlist URL, cached locally and loaded on startup without a network call.
+- One or more named lists (M3U URL or Xtream), with a picker and one active list.
+  The active list's channels are cached locally and loaded on startup without a
+  network call.
 - Manual **Actualizar** keeps the current list if the refresh fails.
 - Live / Movies / Series / All tabs, search, group filters.
 - Fullscreen playback and rotation without recreating the player.
@@ -50,24 +52,55 @@ sync slider.
 - **Local most-played**: the user is not interested in per-device statistics.
 - **Bundled brand logos** (Movistar, DAZN, etc.): trademark/copyright risk. The
   app only uses provider-supplied `tvg-logo` URLs and a generic fallback.
-- **Multi-list management**: the product is intentionally one list.
 
-## APK delivery / GitHub Actions (separate chapter)
+**Multi-list management** used to be listed here as "the product is
+intentionally one list". That decision was reversed on 2026-11-01; the feature
+shipped and now lives under **Done** above.
 
-A GitHub Actions workflow can build the APK on every push, run unit tests, upload
-an artifact, and create a GitHub Release on tags. For a public download link,
-use a Release asset, not an expiring workflow artifact:
+## Next: signed release and GitHub Releases (top priority)
+
+Distribution is **GitHub Releases**. There is no Play Store track: the app ships
+empty, needs cleartext HTTP for user-supplied sources, and Play would add policy
+review without adding reach that matters here.
+
+Remaining work:
+
+- Generate a release keystore, keep it out of git, and wire a `signingConfig`
+  that reads `keystore.properties` locally and GitHub Secrets in CI.
+- Enable `isMinifyEnabled` / `shrinkResources` for `release` and verify the
+  parser and Media3 still work under R8.
+- Add a GitHub Actions workflow that runs `:app:testDebugUnitTest` and
+  `:app:assembleRelease` on tags, then attaches the APK to a Release.
+- Publish the APK SHA-256 and the signing certificate fingerprint in each
+  release so downloads can be verified independently.
+- Keep `versionCode` monotonically increasing and tag releases `vX.Y.Z`.
+
+Link to a Release asset, never an expiring workflow artifact, and never the
+debug APK:
 
 ```text
-https://github.com/lsunol/my-iptv-player/releases/latest/download/app-debug.apk
+https://github.com/lsunol/my-iptv-player/releases/latest/download/app-release.apk
 ```
 
-A release-signed APK needs a keystore stored in GitHub Secrets. Debug APKs are
-for testers only. A workflow can also add a build badge to the README.
+Optional, once releases exist: submit to **IzzyOnDroid** (an F-Droid-compatible
+repo that consumes your already-signed release APK) and mention that
+**Obtainium** can follow the releases for automatic updates.
+
+## Next: parse the playlist as a stream
+
+Today the whole document is materialised before parsing: raw bytes, then a
+`String`, then a `List<String>` of lines, then the channels. For a 35 MB list
+that is a peak of a few hundred MB, which is why a byte ceiling has to exist at
+all. Streaming the response into a line-by-line parser, and writing the cache
+file as the bytes arrive, would drop the peak to roughly the parsed channels
+alone, and would let the byte ceiling go away. It also matches what
+`AGENTS.md` already asks for ("parse line by line, never regex the whole
+document"). Not urgent while real lists stay under ~35 MB.
 
 ## Suggested order
 
-1. EPG Now/Next (when the UI can stay clean).
-2. Radio overlay Phase 1.
-3. GitHub Actions + release.
+1. Signed release + GitHub Actions (see above). Nothing is distributable until
+   this exists.
+2. EPG Now/Next (when the UI can stay clean).
+3. Radio overlay Phase 1.
 4. EPG grid and radio Phase 2 only if the simpler versions are solid.

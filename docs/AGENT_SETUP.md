@@ -242,7 +242,7 @@ After setup, these checks were run from inside `my-iptv-player` with
 | Fullscreen | Landscape + immersive; exit button and back restored the top bar |
 | Rotation | Same Media3 player ID after portrait -> landscape; no reconnect, no crash |
 | Back | Player stopped and released; list returned |
-| Package rename | `app.opentv` installs and launches on a physical Android 16 device |
+| Package rename | `dev.lluissunol.iptv` installs and launches on a physical Android 16 device |
 | Favorites | star toggle, per-category tabs/counts, shared `tvg-id` variants, persistence after force-stop |
 | Brand mark | generated mark used in adaptive/round launcher icons, header and URL hero |
 | Channel logos | provider `tvg-logo` only; missing/broken URLs fall back to the generated initial |
@@ -288,7 +288,7 @@ The full matrix and re-verification commands are in
 
 - The app is scaffolded and `:app:assembleDebug` succeeds; the APK is
   `app/build/outputs/apk/debug/app-debug.apk`.
-- The package is now `app.opentv`; it installs on a physical Android 16 device.
+- The package is now `dev.lluissunol.iptv`; it installs on a physical Android 16 device.
   Favorites (star toggles, per-category tabs, persistence) and the generated
   launcher/header mark were verified there. Android 7 and the final release
   signing are still pending.

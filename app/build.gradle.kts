@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "app.opentv"
+    namespace = "dev.lluissunol.iptv"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "app.opentv"
+        applicationId = "dev.lluissunol.iptv"
         minSdk = 24
         targetSdk = 36
         versionCode = 2

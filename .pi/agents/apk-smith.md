@@ -30,8 +30,8 @@ Procedure:
 4. Install with `adb install -r`. If no device is connected, say so clearly and
    leave the verified APK ready; do not pretend installation succeeded.
 5. Launch and capture a short logcat window:
-   `adb shell am start -n app.opentv/.MainActivity` then
-   `adb logcat --pid=$(adb shell pidof -s app.opentv)`.
+   `adb shell am start -n dev.lluissunol.iptv/.MainActivity` then
+   `adb logcat --pid=$(adb shell pidof -s dev.lluissunol.iptv)`.
 6. For release, only with explicit user approval: create/use a keystore outside
    the repo, put secrets in `keystore.properties` (git-ignored), build
    `assembleRelease`, verify, and report the APK path + SHA-256. Never commit a

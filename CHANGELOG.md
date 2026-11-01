@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased]
+
+- Added multiple named lists (M3U URL or Xtream), with a picker, per-list cache
+  and one active list at a time. Existing single-list settings and cache are
+  migrated on first run; deleting a list does not touch favorites.
+- Credentials are masked while typing or editing an Xtream URL, so usernames and
+  passwords are not shown in full on screen.
+- Fixed the display cutout leaking as a left inset after returning from
+  fullscreen landscape on Android 15+.
+- Fixed the phone staying in landscape after leaving fullscreen. The orientation
+  in use before fullscreen is now remembered and restored explicitly, because
+  the forced landscape request also rewrites the system user rotation on some
+  OEM builds, so releasing the display to the system left it stuck sideways.
+- Package renamed from `app.opentv` to `dev.lluissunol.iptv`. Android treats this
+  as a different app: installed lists and favorites do not carry over, and the
+  previous package stays installed until it is removed.
+- Raised the downloaded-playlist ceiling from 32 MiB to 128 MiB. Provider Xtream
+  dumps reach ~35 MB and were being rejected by a guard that dated from the first
+  commit. The download also hands its buffer over without the extra copy a
+  `ByteArrayOutputStream` forces, and a list that cannot fit in the heap now
+  reports that it ran out of memory instead of killing the process.
+
 ## [0.2.0] - 2026-11-01
 
 - Added per-category favorites (Live / Movies / Series / All) with a star on

@@ -2,14 +2,33 @@
 
 A small, transparent Android IPTV player.
 
-**Status: functional Android player with favorites and a custom brand mark.**
-Paste a playlist URL, browse Live/Movies/Series, search, play with Media3, save
-per-category favorites, and use provider-supplied channel logos. Tested on a
-physical Android 16 device. The APK is a debug build for personal sideloading.
+**Status: functional Android player with multiple lists, favorites and a custom
+brand mark.** Paste one or more playlist URLs, browse Live/Movies/Series,
+search, play with Media3, save per-category favorites, and use
+provider-supplied channel logos. Tested on a physical Android 16 device.
 
-## What it will do
+## Download
 
-1. Paste one playlist URL (M3U/M3U8 or Xtream `get.php`).
+APKs will be published as **GitHub Releases**, which is the only supported
+download channel:
+
+```text
+https://github.com/lsunol/my-iptv-player/releases/latest
+```
+
+Every release is signed with the project release key, so newer versions install
+over older ones, and each release lists the SHA-256 of its APK so you can verify
+what you downloaded. There is no signed release yet: until the first one is
+published, build from source with the development instructions below.
+
+Do **not** distribute `app-debug.apk`. It is signed with the public Android
+debug key, so anyone can forge an "update" for it, and it cannot be upgraded in
+place by a release-signed build.
+
+## What it does
+
+1. Paste one or more playlist URLs (M3U/M3U8 or Xtream `get.php`), give each a
+   name, and switch between them.
 2. See Live / Movies / Series tabs and the channel count.
 3. Search by name (accents and case do not matter), filter by group.
 4. Tap a channel and watch it, in portrait or fullscreen landscape.
@@ -22,6 +41,14 @@ physical Android 16 device. The APK is a debug build for personal sideloading.
    generated initial. No brand logos are bundled.
 
 No account, no backend, no ads, no analytics, no cloud sync.
+
+## What this app does not do
+
+It ships **empty**. There is no bundled channel list, no demo provider, and no
+"free TV" catalogue, and it will never help you find one. Open IPTV is a
+player: you paste a source you are entitled to use. It is not affiliated with,
+endorsed by, or sponsored by any provider, and no brand logos are bundled in
+the APK or the repository.
 
 ## Why
 
@@ -67,23 +94,28 @@ in [`AGENTS.md`](AGENTS.md). The feature research and backlog are in
 [`docs/ROADMAP.md`](docs/ROADMAP.md). Changes are listed in
 [`CHANGELOG.md`](CHANGELOG.md).
 
-## Install on your phone
+## Install
 
-1. On the phone: enable **Developer options** and **USB debugging**.
-2. Connect a **data** USB cable and choose **File transfer / MTP** (not
-   charge-only). Accept the RSA authorization prompt.
-3. From the project:
+**From a release (recommended).** Download the APK from
+[Releases](https://github.com/lsunol/my-iptv-player/releases/latest), open it on
+the phone, and allow installing from that source when Android asks. Releases are
+signed with the project release key, so newer versions install over older ones.
+Check the published SHA-256 if you want to verify the download.
+
+**From your own build.** On the phone, enable **Developer options** and **USB
+debugging**. Connect a **data** USB cable and choose **File transfer / MTP**
+(not charge-only). Accept the RSA authorization prompt.
 
 ```bash
+./gradlew :app:assembleDebug
 adb devices -l
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n app.opentv/.MainActivity
+adb shell am start -n dev.lluissunol.iptv/.MainActivity
 ```
 
-The APK is a debug build signed with the local debug key. It is for personal
-sideloading, not for publishing. If `adb devices` is empty, the phone is not
-visible to Windows yet: try another cable/port, unlock the phone, or use
-wireless debugging (`adb pair` + `adb connect`).
+If `adb devices` is empty, the phone is not visible to Windows yet: try another
+cable/port, unlock the phone, or use wireless debugging (`adb pair` +
+`adb connect`).
 
 ## Repository layout
 

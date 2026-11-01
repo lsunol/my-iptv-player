@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing this app stores may leave the device: `lists_json` holds the user's
+  list URLs and, for Xtream lists, the username and password in clear text, and
+  `files/playlist-*.cache` holds a downloaded playlist.
+
+  Android 12+ (API 31+) runs device-to-device transfer through its own
+  extraction step, which `android:allowBackup="false"` does not cover, so both
+  cloud backup and device transfer are excluded explicitly here. Older releases
+  only need `allowBackup="false"`, which is also set in the manifest.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -100,7 +100,7 @@ SDK="$LOCALAPPDATA/Android/Sdk"
 
 `aapt2 dump badging` must show:
 
-- `package: name='app.opentv'`
+- `package: name='dev.lluissunol.iptv'`
 - `sdkVersion:'24'`
 - `targetSdkVersion:'36'`
 
@@ -112,8 +112,8 @@ If the APK is unsigned (debug builds are signed with the debug key),
 ```bash
 adb devices -l
 adb install -r -d app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n app.opentv/.MainActivity
-adb logcat --pid=$(adb shell pidof -s app.opentv)
+adb shell am start -n dev.lluissunol.iptv/.MainActivity
+adb logcat --pid=$(adb shell pidof -s dev.lluissunol.iptv)
 ```
 
 If `adb devices` is empty:
@@ -176,7 +176,7 @@ publish a personal build signed with a debug key.
 | `Failed to apply plugin 'org.jetbrains.kotlin.android'` | AGP 9 built-in Kotlin | do not upgrade; or follow `agp-9-upgrade` |
 | `Duplicate class ...` | overlapping dependencies | align versions; exclude the duplicate |
 | `R8 missing class` | missing keep rule | add a targeted `-keep`; do not disable R8 |
-| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | different signing key | `adb uninstall app.opentv` then install |
+| `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | different signing key | `adb uninstall dev.lluissunol.iptv` then install |
 | `INSTALL_FAILED_VERSION_DOWNGRADE` | lower versionCode | bump versionCode or use `-d` for debug |
 | `INSTALL_FAILED_INSUFFICIENT_STORAGE` | phone full | free space |
 | `CLEARTEXT communication not permitted` | manifest flag missing | `android:usesCleartextTraffic="true"` |

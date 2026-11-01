@@ -2,19 +2,29 @@
 
 ## Mission
 
-A tiny, transparent, open-source Android IPTV player. The user pastes **one**
-playlist URL (M3U / M3U8 / Xtream `get.php`), the app loads the channels, the
-user searches and taps a channel, and it plays. No account, no backend, no ads,
-no analytics, no cloud sync.
+A tiny, transparent, open-source Android IPTV player. The user pastes **one or
+more** playlist URLs (M3U / M3U8 / Xtream `get.php`), names each one, and
+switches between them; the app loads the active list's channels, the user
+searches and taps a channel, and it plays. No account, no backend, no ads, no
+analytics, no cloud sync.
+
+The app ships **empty**. It never bundles, hardcodes, or suggests a channel list
+or a provider: it plays a source the user is entitled to use, and nothing else.
 
 The app must make failures understandable. A blank screen or a generic "error"
 is a bug.
 
 ## v1 scope (do not expand without an explicit decision)
 
+Explicit scope decision on record: **multi-list management** (named lists, M3U
+URL or Xtream server, one active list at a time, per-list cache) was approved
+and merged on 2026-11-01. It is in scope, and the older "single list only" rule
+is superseded.
+
 In scope:
 
-- One playlist URL input, persisted locally.
+- One or more named list configurations, persisted locally, with a list picker
+  and a single active list.
 - M3U/M3U8 parsing, including Xtream-style `get.php?...&type=m3u_plus` URLs.
 - Source tabs: **Live**, **Movies**, **Series**, **All**. Default to **Live**,
   but if Live is empty and another tab has entries, start on **All** and explain
@@ -33,11 +43,13 @@ In scope:
   cache without a network request and shows the last-updated time.
 - Manual **Actualizar** keeps the current list visible and only replaces it on
   success; a failed refresh must never destroy the working list.
-- A single playlist only. No multi-list UI in v1.
+- Multiple named lists with a picker and one active list at a time; each list
+  keeps its own cache. No cross-list search, aggregation or profiles.
 - Fullscreen playback (immersive, landscape) with an explicit exit button; back
   exits fullscreen before closing the player.
 - Rotation must not recreate the Activity or reconnect the player.
-- A debug APK the user can install with `adb install`.
+- A release-signed APK published on GitHub Releases, plus a debug APK for
+  development with `adb install`.
 - Actionable error messages. "Unknown error" is a bug.
 - Spanish UI by default (`values/strings.xml`), with all user-facing text in
   resources so English can be added later.
@@ -47,7 +59,7 @@ Out of scope for v1 (unless the user explicitly asks):
 - EPG/XMLTV, catch-up, recording, Chromecast, PiP, Android TV, downloads.
   EPG and radio overlay are researched in `docs/FEATURE_RESEARCH.md` and planned
   in `docs/ROADMAP.md`; they are not v1 scope.
-- Multiple playlists/profiles, cloud sync, accounts, recommendations.
+- Profiles, cloud sync, accounts, cross-list aggregation, recommendations.
 - DRM, subtitles, audio track UI, per-channel HTTP headers.
 - Room, Hilt/Koin, WorkManager, Firebase, analytics, crash reporting.
 - A custom player. Use Media3.
@@ -79,7 +91,9 @@ Consequences:
 
 ## Architecture target (v1)
 
-- Kotlin, single `:app` module. Package `app.opentv` (provisional).
+- Kotlin, single `:app` module. Package `dev.lluissunol.iptv`, on the
+  `lluissunol.dev` domain. Decided 2026-11-01; renaming it later is a breaking
+  change for installed users, so do not revisit lightly.
 - Jetpack Compose + Material 3. No XML layouts.
 - Media3 ExoPlayer (`media3-exoplayer`, `media3-exoplayer-hls`, `media3-ui`,
   `media3-datasource-okhttp`). `PlayerView` inside `AndroidView`.
@@ -95,23 +109,28 @@ Consequences:
 Suggested packages:
 
 ```text
-app.opentv
+dev.lluissunol.iptv
 ├── MainActivity.kt
-├── OpenTvApp.kt
+├── OpenTvApplication.kt
 ├── data/
-│   ├── PlaylistRepository.kt
-│   ├── PlaylistParser.kt
-│   ├── PlaylistHttpClient.kt
-│   ├── SettingsStore.kt
-│   └── model/Channel.kt
+│   ├── PlaylistRepository.kt      # fetch + state; owns the OkHttp client
+│   ├── PlaylistParser.kt          # streaming M3U/Xtream parser
+│   ├── PlaylistCache.kt           # last successful playlist on disk
+│   ├── SearchNormalizer.kt        # accent/accent-insensitive search keys
+│   ├── SettingsStore.kt           # DataStore: lists, active list, favorites
+│   └── model/
+│       ├── Channel.kt
+│       └── PlaylistConfig.kt
 ├── player/
-│   ├── PlayerController.kt
 │   └── PlaybackErrorMapper.kt
 └── ui/
-    ├── App.kt
+    ├── OpenTvApp.kt               # navigation host
+    ├── Formatters.kt
+    ├── lists/ListsScreen.kt       # picker, add/edit/delete, credential masking
     ├── playlist/PlaylistScreen.kt
     ├── playlist/PlaylistViewModel.kt
-    └── player/PlayerScreen.kt
+    ├── player/PlayerScreen.kt
+    └── theme/Theme.kt
 ```
 
 ## Toolchain baseline (build-verified 2026-10-31)
@@ -166,10 +185,10 @@ app/build/outputs/apk/debug/app-debug.apk
 # Install on a connected phone
 adb devices -l
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n app.opentv/.MainActivity
+adb shell am start -n dev.lluissunol.iptv/.MainActivity
 
 # Logs
-adb logcat --pid=$(adb shell pidof -s app.opentv)
+adb logcat --pid=$(adb shell pidof -s dev.lluissunol.iptv)
 
 # Probe a playlist or stream without the app
 node .pi/skills/stream-probe/probe.mjs local/list.m3u --limit 5
@@ -296,8 +315,13 @@ Read the matching skill before touching that area. Project skills live in
   Never send app-generated secrets over cleartext.
 - Use `android:usesCleartextTraffic="true"` for v1. Do not add an allowlist UI
   until the core works.
-- The debug APK is for personal sideloading. Do not publish a release build
-  with a debug keystore.
+- The debug APK is for development only. Never publish a build signed with a
+  debug keystore, and never commit a keystore or its passwords.
+- **The app ships empty.** Never bundle, hardcode, link, or otherwise suggest a
+  channel list, a provider host, or a "free TV" catalogue — not in the APK,
+  samples, docs, or store metadata. Open IPTV plays a source the user is
+  entitled to use; presenting it as a way to obtain content is a rule violation,
+  not a judgement call.
 
 ## Definition of done (v1)
 
@@ -351,8 +375,28 @@ Read the matching skill before touching that area. Project skills live in
 - **Logo**: the generated play-and-signal mark is used in the launcher (adaptive
   and round icons), the header, and the URL hero; the launcher icon matches the
   in-app mark.
-- Still unverified: Android 7 devices, all three demo streams, end-to-end search,
-  and real HTTP 401/403/404 handling.
+- **2026-11-01 — QA fixes on a physical Galaxy S25 (Android 17 / API 37)**:
+  created, edited and deleted lists from the UI; changed the active list's URL
+  from the playlist header and the list **reloaded** (the header timestamp
+  advanced) instead of keeping the stale error; a demo HLS channel played with
+  `AudioTrack` active and `MediaCodec`/`CCodec` decoding; `adb install -r` over
+  the previous debug build preserved the existing lists.
+- **2026-11-01 — fullscreen rotation**: entering fullscreen still forces
+  landscape, and exiting it now restores portrait, including the system's own
+  user rotation (which the forced landscape request had rewritten). Verified
+  across two enter/exit cycles and after closing the player. No
+  `FATAL EXCEPTION`.
+- **2026-11-01 — large playlist**: a synthetic 35.2 MB / 165,000-entry list
+  (Live/Movies/Series paths, 8 accented groups, FHD/HD/HEVC/HDR/SD variants)
+  loaded in 15 s with all 165,000 channels parsed; 0 crashes, 0 OOM, 0 ANR. The
+  three source tabs were verified to filter by type, and accent-insensitive
+  search matched `ESPAÑA - Drama` from the unaccented query `espana`. Peak Java
+  heap was ~220 MB -- that, not the byte guard, is the real ceiling for a list
+  this size. Fast synthetic flings janked ~12-15% of frames (p50 8 ms, p90
+  16-21 ms).
+- Still unverified: Android 7 devices, all three demo streams, real HTTP
+  401/403/404 handling, and scrolling a large list by hand instead of with
+  synthetic flings.
 
 ## Known traps
 

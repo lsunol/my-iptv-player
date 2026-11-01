@@ -3,9 +3,17 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      Lists and caches never leave the device: allowBackup="false" disables
+      cloud backup on every API level, and dataExtractionRules also excludes
+      device-to-device transfer, which Android 12+ handles separately.
+      fullBackupContent is not needed: with allowBackup="false" nothing is
+      backed up before API 31, and device transfer does not exist before 12.
+    -->
     <application
         android:name=".OpenTvApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
