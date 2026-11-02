@@ -17,6 +17,10 @@ is done, what is deliberately postponed, and what was discarded.
 - Neutral branding: a mint/violet play-and-signal mark, matching launcher icon
   and in-app header.
 - Apache-2.0/MIT dependency set, compatible with the repo license (GPLv3).
+- Release signing: the project release keystore lives in the git-ignored
+  `signing/` directory, and `app/build.gradle.kts` signs release builds from
+  `signing/keystore.properties` and fails fast when it is missing, so a release
+  build can never fall back to the debug key. First release-signed APK: 0.3.0.
 
 ## Next: EPG (low priority, do not disturb the current list screen)
 
@@ -65,8 +69,8 @@ review without adding reach that matters here.
 
 Remaining work:
 
-- Generate a release keystore, keep it out of git, and wire a `signingConfig`
-  that reads `keystore.properties` locally and GitHub Secrets in CI.
+- Wire the existing release keystore into CI with GitHub Secrets, so a tagged
+  build on a clean runner can sign without a local `signing/` directory.
 - Enable `isMinifyEnabled` / `shrinkResources` for `release` and verify the
   parser and Media3 still work under R8.
 - Add a GitHub Actions workflow that runs `:app:testDebugUnitTest` and

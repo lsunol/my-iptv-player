@@ -1,9 +1,21 @@
+import java.util.Properties
+import org.gradle.api.GradleException
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release signing credentials live only in the git-ignored
+// signing/keystore.properties. Never hardcode passwords here and never fall
+// back to the debug signing key for a release build.
+val signingPropertiesFile = rootProject.file("signing/keystore.properties")
+val signingProperties = Properties().apply {
+    if (signingPropertiesFile.exists()) {
+        signingPropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -14,13 +26,25 @@ android {
         applicationId = "dev.lluissunol.iptv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (signingPropertiesFile.exists()) {
+                storeFile = file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -41,6 +65,28 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+// Fail fast with an actionable message if a release build is requested while
+// signing/keystore.properties is missing. Applies only to release APK/AAB
+// tasks, so debug and lint builds keep working without the keystore.
+gradle.taskGraph.whenReady {
+    val needsReleaseSigning = allTasks.any { task ->
+        val name = task.name.lowercase()
+        (name.startsWith("assemble") || name.startsWith("package") || name.startsWith("bundle")) &&
+            name.endsWith("release")
+    }
+    if (needsReleaseSigning && !signingPropertiesFile.exists()) {
+        throw GradleException(
+            "Cannot build a release APK: signing/keystore.properties is missing.\n" +
+                "Create it (git-ignored) next to signing/opentv-release.jks with:\n" +
+                "  storeFile=../signing/opentv-release.jks\n" +
+                "  storePassword=<store password>\n" +
+                "  keyAlias=opentv\n" +
+                "  keyPassword=<key password>\n" +
+                "Release builds never fall back to the debug signing key."
+        )
     }
 }
 

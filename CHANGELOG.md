@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-02
+
 - Added multiple named lists (M3U URL or Xtream), with a picker, per-list cache
   and one active list at a time. Existing single-list settings and cache are
   migrated on first run; deleting a list does not touch favorites.
