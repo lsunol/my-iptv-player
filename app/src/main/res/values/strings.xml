@@ -31,6 +31,27 @@
     <string name="remove_favorite">Quitar de favoritos</string>
     <string name="favorites_count">%1$s favoritos</string>
 
+    <!-- Catálogo Xtream: rejilla de carteles y detalle de series -->
+    <string name="items_count">%1$s títulos</string>
+    <string name="all_categories">Todas</string>
+    <string name="layout_grid">Ver como cuadrícula</string>
+    <string name="layout_list">Ver como lista</string>
+    <string name="catalog_search_all">Buscando en todas las pestañas: se muestra la lista plana de canales.</string>
+
+    <!-- Catálogo Xtream: degradaciones explicadas -->
+    <string name="catalog_missing">El catálogo de esta lista aún no se ha cargado; sin él no hay cuadrícula de carteles ni series agrupadas.</string>
+    <string name="catalog_unavailable">No se pudo cargar el catálogo de películas y series; se muestra la lista plana.</string>
+    <string name="catalog_skipped_items">Se omitieron %1$d elementos del catálogo por datos no válidos.</string>
+    <string name="catalog_empty_response">El proveedor respondió sin datos del catálogo.</string>
+    <string name="catalog_invalid_json">El catálogo del proveedor no era JSON válido.</string>
+    <string name="catalog_unexpected_format">El catálogo del proveedor no tenía el formato esperado.</string>
+    <string name="empty_category">No hay títulos en esta categoría.</string>
+    <string name="episode_number">Temporada %1$d · Episodio %2$d</string>
+    <string name="season_number">Temporada %1$d</string>
+    <string name="series_episodes_count">%1$s episodios</string>
+    <string name="series_loading">Cargando episodios…</string>
+    <string name="series_no_episodes">Esta serie no tiene episodios disponibles.</string>
+
     <!-- Mis listas -->
     <string name="lists_title">Mis listas</string>
     <plurals name="lists_count">

@@ -7,6 +7,17 @@ enum class SourceType {
     OTHER
 }
 
+/**
+ * Quality tokens providers append to channel and catalogue names (`FHD`, `HD`,
+ * `HEVC`, ...). Shared by the M3U parser and the Xtream catalogue merge so a
+ * movie shows the same badge whichever side detected it.
+ */
+private val qualityToken = Regex("(?i)(4K|UHD|FHD|HD|SD|HEVC|HDR|H\\.265|H265)")
+
+/** The quality badge text of a name, or null when the name carries none. */
+internal fun qualityTagOf(name: String): String? =
+    qualityToken.find(name)?.value?.uppercase(java.util.Locale.ROOT)
+
 data class Channel(
     val id: String,
     val name: String,

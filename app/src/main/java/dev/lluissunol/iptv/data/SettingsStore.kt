@@ -16,6 +16,9 @@ import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "opentv_settings")
 
+/** Layout of the Movies/Series poster views; the grid is the feature default. */
+enum class VodLayout { LIST, GRID }
+
 /**
  * On-device settings: the configured lists, which one was used last, and the
  * global favorites. Everything else (channels, cache) lives in memory or in
@@ -29,6 +32,7 @@ class SettingsStore(private val context: Context) {
     private val listsKey = stringPreferencesKey("lists_json")
     private val activeListKey = stringPreferencesKey("active_list_id")
     private val favoriteKeysKey = stringSetPreferencesKey("favorite_keys")
+    private val vodLayoutKey = stringPreferencesKey("v1_vod_layout")
 
     // v1 stored a single playlist in these keys; kept only for migration.
     private val legacyUrlKey = stringPreferencesKey("playlist_url")
@@ -43,6 +47,17 @@ class SettingsStore(private val context: Context) {
 
     val favoriteKeys: Flow<Set<String>> = context.dataStore.data.map {
         it[favoriteKeysKey]?.toSet() ?: emptySet()
+    }
+
+    /** Persisted Movies/Series layout preference; unknown values fall back to GRID. */
+    val vodLayout: Flow<VodLayout> = context.dataStore.data.map { prefs ->
+        prefs[vodLayoutKey]
+            ?.let { stored -> runCatching { VodLayout.valueOf(stored) }.getOrNull() }
+            ?: VodLayout.GRID
+    }
+
+    suspend fun setVodLayout(layout: VodLayout) {
+        context.dataStore.edit { it[vodLayoutKey] = layout.name }
     }
 
     /**

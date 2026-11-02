@@ -81,7 +81,8 @@ Project agents live in `.pi/agents/`. Builtins are overridden in
 | `iptv-engineer` | project | sonnet-5.5 | high | parser, search, Media3, streams |
 | `apk-smith` | project | deepseek-v4-pro | high | Gradle, APK, signing, adb |
 | `qa-reviewer` | project | sonnet-5.5 | high | read-only review and tests |
-| `brand-designer` | project | sonnet-5.5 | high | logo concepts, image generation, brand brief |
+| `brand-designer` | project | glm-5.3 | high | logo concepts, image generation, brand brief |
+| `ui-designer` | project | glm-5.3 | high | interaction spec, states, Material 3 review |
 | `scout` | builtin | haiku-5.5 | low | fast recon |
 | `researcher` | builtin | gemini-2.5-flash | medium | web research with sources |
 | `reviewer` | builtin | sonnet-5.5 | high | generic review |

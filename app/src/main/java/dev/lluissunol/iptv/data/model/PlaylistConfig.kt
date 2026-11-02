@@ -74,6 +74,53 @@ fun buildXtreamUrl(server: String?, username: String?, password: String?): Strin
     return "$base/get.php?username=$user&password=$pass&type=m3u_plus&output=m3u8"
 }
 
+/**
+ * Xtream `player_api.php` metadata URL.
+ *
+ * Template: `<server>/player_api.php?username=U&password=P&action=<action>`.
+ * [action] may carry extra parameters (for example
+ * `"get_series_info&series_id=12"`); callers must only pass values they have
+ * validated themselves (numeric ids), never raw user input.
+ *
+ * The result embeds the credentials in the query, exactly like [buildXtreamUrl]:
+ * it must never be logged (use [PlaylistConfig.displayHost] for that).
+ */
+fun buildXtreamApiUrl(
+    server: String?,
+    username: String?,
+    password: String?,
+    action: String
+): String? {
+    val base = xtreamBaseUrl(server) ?: return null
+    val user = encodeCredential(username.orEmpty())
+    val pass = encodeCredential(password.orEmpty())
+    return "$base/player_api.php?username=$user&password=$pass&action=$action"
+}
+
+/**
+ * Xtream stream playback URL of the same shape the provider's own M3U uses:
+ * `<server>/<type>/<username>/<password>/<id>.m3u8` with `type` being
+ * `"movie"` or `"series"`.
+ *
+ * This is only a *fallback* for catalogue items whose id has no counterpart in
+ * the downloaded M3U. It always requests `.m3u8` (HLS): a
+ * `container_extension` URL (`.mkv`, `.avi`, ...) is never produced, because
+ * those are raw files that bypass the provider's HLS pipeline and may not be
+ * playable at all.
+ */
+fun buildXtreamStreamUrl(
+    server: String?,
+    username: String?,
+    password: String?,
+    type: String,
+    streamId: String
+): String? {
+    val base = xtreamBaseUrl(server) ?: return null
+    val user = encodeCredential(username.orEmpty())
+    val pass = encodeCredential(password.orEmpty())
+    return "$base/$type/$user/$pass/$streamId.m3u8"
+}
+
 /** `server` normalized to `scheme://host[:port][/path]` without a trailing slash. */
 fun xtreamBaseUrl(server: String?): String? {
     val raw = server?.trim().orEmpty()

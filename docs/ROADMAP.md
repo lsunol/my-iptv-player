@@ -21,6 +21,35 @@ is done, what is deliberately postponed, and what was discarded.
   `signing/` directory, and `app/build.gradle.kts` signs release builds from
   `signing/keystore.properties` and fails fast when it is missing, so a release
   build can never fall back to the debug key. First release-signed APK: 0.3.0.
+- **Xtream catalogue (Movies/Series)**: for Xtream lists the app also calls
+  `player_api.php` (`get_vod_streams`, `get_series`, both category lists and the
+  lazy `get_series_info`). Playback URLs still come from the downloaded M3U
+  (`output=m3u8`, so HLS); the API contributes metadata only. The merged
+  catalogue is cached per list (`files/xtream-<listId>.json`, atomic write on
+  full success only), so a Wi-Fi-off relaunch should show the grid without a
+  network call. (The code path is wired and reviewed, but a Wi-Fi-off relaunch
+  showing the grid has **not** been verified on a device yet.)
+- **Poster grid** for Movies/Series: 3-column `LazyVerticalGrid`, persisted
+  list/grid toggle (`v1_vod_layout`, grid by default), provider category chips
+  replacing group pills on those tabs (a catalogue tab whose provider sends no
+  categories shows no pills at all, instead of M3U group pills that the
+  catalogue branch would ignore), and a series drill-down screen
+  (series -> seasons -> episodes). Episodes map to the existing `Channel` shape,
+  so the player is unchanged. If the API fails while the M3U works, the flat
+  list is shown with a one-line warning.
+
+### Catalogue follow-ups (not done yet)
+
+- **Favourites**: the Favorites screen lists catalogue-only favourites as well,
+  not just M3U channels, so a starred series (`series:<id>`) appears and opens
+  its drill-down, and a movie whose fallback URL is not in the M3U
+  (`url:<hash>`) appears and plays — both can be counted and un-starred there.
+  Known gap: an *episode* whose stream is not in the M3U has the same invisible
+  `url:<hash>` key and is only un-starrable from the row that starred it.
+  Covering it needs the episode list of every starred series (one network call
+  per series), so it waits for a batch/persisted episode cache.
+- Deduplication/quality-variant grouping of grid items is still v1.1.
+- Ratings and movie plot screens are not rendered in the grid.
 
 ## Next: EPG (low priority, do not disturb the current list screen)
 

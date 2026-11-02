@@ -4,6 +4,7 @@ import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.GroupCount
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.SourceType
+import dev.lluissunol.iptv.data.model.qualityTagOf
 import java.net.URI
 import java.util.Locale
 
@@ -15,7 +16,6 @@ object PlaylistParser {
 
     private val attribute = Regex("""([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"""")
     private val unquotedAttribute = Regex("""([A-Za-z0-9_-]+)\s*=\s*([^"\s]+)""")
-    private val quality = Regex("(?i)(4K|UHD|FHD|HD|SD|HEVC|HDR|H\\.265|H265)")
     private val movieGroup = Regex("(?i)(vod|pel[ií]cula|movie|cine|film)")
     private val seriesGroup = Regex("(?i)(serie|novela|anime|docuserie)")
     private val liveGroup = Regex("(?i)(tv|live|en vivo|directo|canal|deporte|futbol|fútbol|noticia|infantil|música|musica)")
@@ -93,7 +93,7 @@ object PlaylistParser {
                                 searchKey = SearchNormalizer.key(
                                     "${entry.name} ${entry.tvgName.orEmpty()} ${entry.group.orEmpty()}"
                                 ),
-                                qualityTag = quality.find(entry.name)?.value?.uppercase(Locale.ROOT),
+                                qualityTag = qualityTagOf(entry.name),
                                 favoriteKey = buildFavoriteKey(entry.tvgId, resolved)
                             )
                             channels += channel

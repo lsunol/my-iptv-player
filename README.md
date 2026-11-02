@@ -127,7 +127,8 @@ cable/port, unlock the phone, or use wireless debugging (`adb pair` +
 ├── .pi/
 │   ├── settings.json         # model routing, packages, subagent config
 │   ├── agents/               # android-architect, android-dev, iptv-engineer,
-│   │                         # apk-smith, qa-reviewer, brand-designer
+│   │                         # apk-smith, qa-reviewer, brand-designer,
+│   │                         # ui-designer
 │   └── skills/
 │       ├── iptv-playlists/   # M3U/Xtream parsing and search
 │       ├── media3-hls/       # ExoPlayer, HLS/TS, lifecycle

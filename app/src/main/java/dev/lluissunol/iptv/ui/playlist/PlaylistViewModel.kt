@@ -9,14 +9,24 @@ import dev.lluissunol.iptv.data.PlaylistException
 import dev.lluissunol.iptv.data.PlaylistRepository
 import dev.lluissunol.iptv.data.SearchNormalizer
 import dev.lluissunol.iptv.data.SettingsStore
+import dev.lluissunol.iptv.data.VodLayout
+import dev.lluissunol.iptv.data.XtreamCache
+import dev.lluissunol.iptv.data.model.CatalogWarning
 import dev.lluissunol.iptv.data.model.Channel
+import dev.lluissunol.iptv.data.model.Episode
 import dev.lluissunol.iptv.data.model.GroupCount
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.PlaylistConfig
 import dev.lluissunol.iptv.data.model.PlaylistKind
+import dev.lluissunol.iptv.data.model.SeriesCard
+import dev.lluissunol.iptv.data.model.SeriesInfo
 import dev.lluissunol.iptv.data.model.SourceType
+import dev.lluissunol.iptv.data.model.VodCatalog
+import dev.lluissunol.iptv.data.model.VodCategory
+import dev.lluissunol.iptv.data.model.VodItem
 import dev.lluissunol.iptv.data.model.buildXtreamUrl
 import dev.lluissunol.iptv.data.model.looksLikeFullXtreamUrl
+import dev.lluissunol.iptv.data.model.toChannel
 import dev.lluissunol.iptv.data.userMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +46,13 @@ import kotlin.coroutines.coroutineContext
 
 /** Top-level destination: the list manager or one loaded playlist. */
 enum class Screen { LISTS, PLAYLIST }
+
+/** One list kept in memory: its parsed channels and (for Xtream) its catalogue. */
+private data class LoadedInMemoryList(
+    val playlist: Playlist,
+    val catalog: VodCatalog?,
+    val catalogWarning: CatalogWarning? = null
+)
 
 /** Validation failures of the add/edit form, mapped to text in the UI. */
 enum class ListFormError {
@@ -69,7 +86,22 @@ data class UiState(
     val activeListId: String? = null,
     val form: ListFormState? = null,
     val playlist: Playlist? = null,
+    /** Merged Xtream catalogue (movies/series/categories), null for plain M3U. */
+    val catalog: VodCatalog? = null,
+    /** Catalogue problem under the header: the degradation when the API failed
+     *  but the M3U works, or the first decode warning (e.g. skipped catalogue
+     *  items) when it loaded imperfectly. Typed; the UI owns the wording and
+     *  decides whether the notice carries an action (see `catalogNotice`). */
+    val catalogWarning: CatalogWarning? = null,
     val filteredChannels: List<Channel> = emptyList(),
+    /** Movies of the active tab, filtered by query and provider category. */
+    val filteredMovies: List<VodItem> = emptyList(),
+    /** Series of the active tab, filtered by query and provider category. */
+    val filteredSeries: List<SeriesCard> = emptyList(),
+    /** Movies/Series layout; persisted, defaults to the poster grid. */
+    val vodLayout: VodLayout = VodLayout.GRID,
+    /** Selected `player_api.php` category id on the Movies/Series tabs. */
+    val selectedVodCategory: String? = null,
     val query: String = "",
     val tab: SourceType? = SourceType.LIVE,
     val searchAll: Boolean = false,
@@ -85,17 +117,65 @@ data class UiState(
     val showFavorites: Boolean = false,
     val favoriteKeys: Set<String> = emptySet(),
     /**
-     * Favorite channels, derived once by [PlaylistViewModel] whenever the
-     * playlist or [favoriteKeys] change. It is a stored list on purpose: reading
-     * it never filters tens of thousands of channels on the main thread.
+     * Favorites, derived once by [PlaylistViewModel] whenever the playlist, the
+     * catalogue or [favoriteKeys] change. It is a stored list on purpose:
+     * reading it never filters tens of thousands of channels on the main thread.
+     * It holds catalogue-only favourites too (series, unmatched movies), which
+     * no channel row would otherwise show.
      */
-    val favorites: List<Channel> = emptyList()
+    val favorites: List<FavoriteEntry> = emptyList(),
+    /** Open series drill-down (seasons then episodes), null when closed. */
+    val selectedSeries: SeriesCard? = null,
+    val seriesInfo: SeriesInfo? = null,
+    val seriesLoading: Boolean = false,
+    val seriesError: String? = null,
+    val selectedSeason: Int? = null
 ) {
     val counts: Map<SourceType, Int> get() = playlist?.counts ?: emptyMap()
     val groups: List<GroupCount>
         get() = playlist?.groupsFor(if (searchAll) null else tab).orEmpty()
     val activeList: PlaylistConfig?
         get() = lists.firstOrNull { it.id == activeListId }
+
+    /**
+     * True when the Xtream catalogue drives the current tab (Movies or Series
+     * with a loaded catalogue and no cross-type search). Both layouts render
+     * the catalogue then; the flat M3U channel list is not used.
+     */
+    val isCatalogTab: Boolean
+        get() = catalog != null && !searchAll &&
+            (tab == SourceType.MOVIE || tab == SourceType.SERIES)
+
+    /** Provider categories of the current tab (`player_api.php`), if any. */
+    val vodCategories: List<VodCategory>
+        get() = when (tab) {
+            SourceType.MOVIE -> catalog?.movieCategories.orEmpty()
+            SourceType.SERIES -> catalog?.seriesCategories.orEmpty()
+            else -> emptyList()
+        }
+
+    /** Number of items the visible content is showing (grid, catalogue or list). */
+    val displayedCount: Int
+        get() = when {
+            isCatalogTab && tab == SourceType.MOVIE -> filteredMovies.size
+            isCatalogTab -> filteredSeries.size
+            else -> filteredChannels.size
+        }
+
+    val contentIsEmpty: Boolean get() = displayedCount == 0
+
+    /**
+     * Count shown by the tab pill: the catalogue size on Movies/Series when the
+     * API catalogue drives the tab, the parsed M3U count otherwise. Keeping the
+     * tabs honest matters: a flat "12.000 canales" next to a 900-title grid is
+     * a lie the user notices immediately.
+     */
+    fun tabCount(type: SourceType?): Int = when {
+        type == null -> playlist?.channels?.size ?: 0
+        type == SourceType.MOVIE && catalog != null -> catalog.movies.size
+        type == SourceType.SERIES && catalog != null -> catalog.series.size
+        else -> playlist?.count(type) ?: 0
+    }
 }
 
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
@@ -103,6 +183,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private val settings: SettingsStore = app.settingsStore
     private val repository: PlaylistRepository = app.playlistRepository
     private val cache = PlaylistCache(application)
+    private val xtreamCache = XtreamCache(application)
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -113,18 +194,37 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
      * list costs tens of MB, so only the two most recently used are retained;
      * anything older is re-read from its cache file when opened again.
      */
-    private val loadedPlaylists = object : LinkedHashMap<String, Playlist>(4, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Playlist>): Boolean =
-            size > MAX_LOADED_LISTS
+    private val loadedPlaylists = object : LinkedHashMap<String, LoadedInMemoryList>(4, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, LoadedInMemoryList>
+        ): Boolean = size > MAX_LOADED_LISTS
     }
 
     private var loadJob: Job? = null
     private var filterJob: Job? = null
+    private var seriesJob: Job? = null
+
+    /**
+     * Series detail of the current session, keyed by series id. The repository
+     * cache already avoids the second network call; this keeps the second open
+     * instant (no spinner flash) and bounds what one drill-down keeps in RAM.
+     */
+    private val loadedSeriesInfo = object : LinkedHashMap<Long, SeriesInfo>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, SeriesInfo>): Boolean =
+            size > MAX_LOADED_SERIES
+    }
 
     init {
         viewModelScope.launch {
             settings.favoriteKeys.collect { keys ->
                 _state.update { it.copy(favoriteKeys = keys) }
+            }
+        }
+        viewModelScope.launch {
+            // Persisted Movies/Series layout; a corrupt preference falls back to
+            // the grid default inside SettingsStore.
+            settings.vodLayout.collect { layout ->
+                _state.update { it.copy(vodLayout = layout) }
             }
         }
         viewModelScope.launch { deriveFavorites() }
@@ -167,15 +267,27 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
         loadJob?.cancel()
         filterJob?.cancel()
+        seriesJob?.cancel()
+        loadedSeriesInfo.clear()
         _state.update {
             it.copy(
                 screen = Screen.PLAYLIST,
                 activeListId = list.id,
                 form = null,
                 playlist = null,
+                catalog = null,
+                catalogWarning = null,
                 filteredChannels = emptyList(),
+                filteredMovies = emptyList(),
+                filteredSeries = emptyList(),
+                selectedSeries = null,
+                seriesInfo = null,
+                seriesLoading = false,
+                seriesError = null,
+                selectedSeason = null,
                 query = "",
                 selectedGroup = null,
+                selectedVodCategory = null,
                 tab = SourceType.LIVE,
                 searchAll = false,
                 isLoading = false,
@@ -191,7 +303,9 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
         val inMemory = loadedPlaylists[list.id]
         if (inMemory != null) {
-            loadJob = viewModelScope.launch { applyPlaylist(list, inMemory) }
+            loadJob = viewModelScope.launch {
+                applyPlaylist(list, inMemory.playlist, inMemory.catalog, inMemory.catalogWarning)
+            }
         } else {
             loadFromCache(list, url)
         }
@@ -199,7 +313,19 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
     fun backToLists() {
         loadJob?.cancel()
-        _state.update { it.copy(screen = Screen.LISTS, form = null, error = null) }
+        seriesJob?.cancel()
+        _state.update {
+            it.copy(
+                screen = Screen.LISTS,
+                form = null,
+                error = null,
+                selectedSeries = null,
+                seriesInfo = null,
+                seriesLoading = false,
+                seriesError = null,
+                selectedSeason = null
+            )
+        }
     }
 
     fun startAddList() {
@@ -321,6 +447,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     // The old cache belongs to another URL; drop it.
                     loadedPlaylists.remove(saved.id)
                     runCatching { cache.delete(saved.id) }
+                    runCatching { xtreamCache.delete(saved.id) }
+                    repository.forget(saved.id)
                     saved.copy(lastLoadedAt = null)
                 } else {
                     saved.copy(lastLoadedAt = previous.lastLoadedAt)
@@ -353,10 +481,14 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             loadedPlaylists.remove(listId)
             runCatching { cache.delete(listId) }
+            runCatching { xtreamCache.delete(listId) }
+            repository.forget(listId)
             runCatching { settings.deleteList(listId) }
             val lists = runCatching { settings.lists.first() }.getOrDefault(emptyList())
             val wasActive = _state.value.activeListId == listId
             if (wasActive) loadJob?.cancel()
+            if (wasActive) seriesJob?.cancel()
+            if (wasActive) loadedSeriesInfo.clear()
             _state.update { current ->
                 current.copy(
                     lists = lists,
@@ -365,6 +497,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     form = if (lists.isEmpty()) ListFormState() else null,
                     playlist = if (wasActive) null else current.playlist,
                     filteredChannels = if (wasActive) emptyList() else current.filteredChannels,
+                    selectedSeries = if (wasActive) null else current.selectedSeries,
                     selectedChannel = null,
                     error = null
                 )
@@ -397,7 +530,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setTab(tab: SourceType?) {
-        _state.update { it.copy(tab = tab, selectedGroup = null) }
+        _state.update { it.copy(tab = tab, selectedGroup = null, selectedVodCategory = null) }
         scheduleFilter(debounce = false)
     }
 
@@ -411,6 +544,121 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         scheduleFilter(debounce = false)
     }
 
+    /** Provider category chip of the Movies/Series tabs; null means "all". */
+    fun setVodCategory(categoryId: String?) {
+        _state.update { it.copy(selectedVodCategory = categoryId) }
+        scheduleFilter(debounce = false)
+    }
+
+    /** Persists the Movies/Series layout so it survives a restart. */
+    fun setVodLayout(layout: VodLayout) {
+        _state.update { it.copy(vodLayout = layout) }
+        viewModelScope.launch { runCatching { settings.setVodLayout(layout) } }
+    }
+
+    fun toggleVodLayout() {
+        setVodLayout(
+            if (_state.value.vodLayout == VodLayout.GRID) VodLayout.LIST else VodLayout.GRID
+        )
+    }
+
+    /** Plays one movie of the catalogue, mapped to the player's channel shape. */
+    fun playVod(item: VodItem) {
+        play(item.toChannel())
+    }
+
+    /**
+     * Opens the series drill-down: seasons and episodes are fetched lazily on
+     * the first open of each series and memoised for the session, so the second
+     * open is instant and no episode list is written to disk.
+     */
+    fun openSeries(card: SeriesCard) {
+        val list = _state.value.activeList ?: return
+        val memo = synchronized(loadedSeriesInfo) { loadedSeriesInfo[card.seriesId] }
+        _state.update {
+            it.copy(
+                selectedSeries = card,
+                seriesInfo = memo,
+                seriesLoading = memo == null,
+                seriesError = null,
+                selectedSeason = memo?.seasons?.firstOrNull()?.number
+            )
+        }
+        if (memo == null) loadSeriesInfo(list, card.seriesId)
+    }
+
+    fun closeSeries() {
+        seriesJob?.cancel()
+        _state.update {
+            it.copy(
+                selectedSeries = null,
+                seriesInfo = null,
+                seriesLoading = false,
+                seriesError = null,
+                selectedSeason = null
+            )
+        }
+    }
+
+    fun retrySeries() {
+        val list = _state.value.activeList ?: return
+        val card = _state.value.selectedSeries ?: return
+        synchronized(loadedSeriesInfo) { loadedSeriesInfo.remove(card.seriesId) }
+        _state.update { it.copy(seriesLoading = true, seriesError = null) }
+        loadSeriesInfo(list, card.seriesId)
+    }
+
+    fun setSeason(number: Int) {
+        _state.update { it.copy(selectedSeason = number) }
+    }
+
+    fun playEpisode(episode: Episode) {
+        val seriesName = _state.value.selectedSeries?.name.orEmpty()
+        play(episode.toChannel(seriesName))
+    }
+
+    /** Dismisses the series drill-down error without leaving the series screen. */
+    fun clearSeriesError() {
+        _state.update { it.copy(seriesError = null) }
+    }
+
+    private fun loadSeriesInfo(list: PlaylistConfig, seriesId: Long) {
+        seriesJob?.cancel()
+        seriesJob = viewModelScope.launch {
+            try {
+                val info = repository.getSeriesInfo(list, seriesId)
+                synchronized(loadedSeriesInfo) { loadedSeriesInfo[seriesId] = info }
+                if (_state.value.selectedSeries?.seriesId != seriesId) return@launch
+                _state.update {
+                    it.copy(
+                        seriesInfo = info,
+                        seriesLoading = false,
+                        seriesError = null,
+                        selectedSeason = info.seasons.firstOrNull()?.number
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PlaylistException) {
+                if (_state.value.selectedSeries?.seriesId == seriesId) {
+                    _state.update {
+                        it.copy(seriesLoading = false, seriesError = e.userMessage())
+                    }
+                }
+            } catch (e: Exception) {
+                if (_state.value.selectedSeries?.seriesId == seriesId) {
+                    _state.update {
+                        it.copy(
+                            seriesLoading = false,
+                            seriesError = "No se pudieron cargar los episodios. " +
+                                "Comprueba tu conexión e inténtalo de nuevo."
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     fun play(channel: Channel) {
         _state.update { it.copy(selectedChannel = channel) }
     }
@@ -419,9 +667,22 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         _state.update { it.copy(selectedChannel = null) }
     }
 
-    fun toggleFavorite(channel: Channel) {
+    /** Toggles a favourite by its stable key (movies, series, episodes). */
+    fun toggleFavoriteKey(key: String) {
         viewModelScope.launch {
-            settings.toggleFavorite(channel.favoriteKey)
+            settings.toggleFavorite(key)
+        }
+    }
+
+    /**
+     * Activates a favourites row: a channel or a movie plays, a series opens
+     * its drill-down. The favourites screen stays open underneath, so backing
+     * out of the drill-down or the player returns to it.
+     */
+    fun openFavorite(entry: FavoriteEntry) {
+        when (entry) {
+            is ChannelFavorite -> play(entry.channel)
+            is SeriesFavorite -> openSeries(entry.card)
         }
     }
 
@@ -445,28 +706,36 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     // ----------------------------------------------------------- internals
 
     /** Inputs that can change the favorite list; identity-cheap to compare. */
-    private data class FavoritesInput(val playlist: Playlist?, val keys: Set<String>)
+    private data class FavoritesInput(
+        val playlist: Playlist?,
+        val catalog: VodCatalog?,
+        val keys: Set<String>
+    )
 
     /**
-     * Keeps [UiState.favorites] in sync with the playlist and the favorite keys.
-     * The filter runs off the main thread and only when one of the two inputs
-     * changes, so a 40k-channel playlist costs one pass, not one per
-     * recomposition. Progress ticks and search keystrokes are filtered out here.
+     * Keeps [UiState.favorites] in sync with the playlist, the catalogue and the
+     * favorite keys. The derivation runs off the main thread and only when one
+     * of the three inputs changes, so a 40k-channel playlist costs one pass per
+     * change, not one per recomposition. Progress ticks and search keystrokes
+     * are filtered out here.
      */
     private suspend fun deriveFavorites() {
         _state
-            .map { FavoritesInput(it.playlist, it.favoriteKeys) }
+            .map { FavoritesInput(it.playlist, it.catalog, it.favoriteKeys) }
             .distinctUntilChanged { old, next ->
-                old.playlist === next.playlist && old.keys == next.keys
+                old.playlist === next.playlist &&
+                    old.catalog === next.catalog &&
+                    old.keys == next.keys
             }
             .collect { input ->
                 val favorites = withContext(Dispatchers.Default) {
-                    input.playlist?.channels
-                        ?.filter { it.favoriteKey in input.keys }
-                        .orEmpty()
+                    buildFavorites(input.playlist, input.catalog, input.keys)
                 }
                 _state.update { current ->
-                    if (current.playlist === input.playlist && current.favoriteKeys == input.keys) {
+                    if (current.playlist === input.playlist &&
+                        current.catalog === input.catalog &&
+                        current.favoriteKeys == input.keys
+                    ) {
                         current.copy(favorites = favorites)
                     } else {
                         current
@@ -513,8 +782,13 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     null
                 }
                 if (playlist != null && playlist.channels.isNotEmpty()) {
-                    loadedPlaylists[list.id] = playlist
-                    applyPlaylist(list, playlist)
+                    val catalog = if (list.kind == PlaylistKind.XTREAM) {
+                        runCatching { xtreamCache.read(list.id) }.getOrNull()
+                    } else {
+                        null
+                    }
+                    loadedPlaylists[list.id] = LoadedInMemoryList(playlist, catalog)
+                    applyPlaylist(list, playlist, catalog)
                     return@launch
                 }
             }
@@ -535,7 +809,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         }
         val ctx = coroutineContext
         try {
-            val loaded = repository.load(url) { bytes, total, entries ->
+            val onProgress: (Long, Long, Int) -> Unit = { bytes, total, entries ->
                 // Ignore progress from a download that was cancelled by a list switch.
                 if (ctx.isActive) {
                     _state.update {
@@ -547,16 +821,34 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
             }
+            // Plain-M3U lists keep byte-for-byte today's path; only Xtream lists
+            // also fetch the player_api catalogue (degrading on failure).
+            val loaded = if (list.kind == PlaylistKind.XTREAM) {
+                repository.loadWithCatalog(list, onProgress)
+            } else {
+                repository.load(url, onProgress)
+            }
 
             // Persist the download even if the user already switched away, so the
             // cache is warm when they come back (avoid re-downloading).
             val now = System.currentTimeMillis()
             runCatching { cache.write(list.id, loaded.rawBytes) }
-            loadedPlaylists[list.id] = loaded.playlist
+            // The catalogue cache is only replaced on full success, mirroring
+            // the M3U cache: a failed Actualizar keeps the working catalogue.
+            loaded.catalog?.let { catalog ->
+                runCatching { xtreamCache.write(list.id, catalog) }
+            }
+            loadedPlaylists[list.id] =
+                LoadedInMemoryList(loaded.playlist, loaded.catalog, loaded.catalogWarning)
             runCatching { settings.markLoaded(list.id, now) }
 
             if (_state.value.activeListId != list.id) return
-            applyPlaylist(list.copy(lastLoadedAt = now), loaded.playlist)
+            applyPlaylist(
+                list.copy(lastLoadedAt = now),
+                loaded.playlist,
+                loaded.catalog,
+                loaded.catalogWarning
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: PlaylistException) {
@@ -578,10 +870,28 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private suspend fun applyPlaylist(list: PlaylistConfig, playlist: Playlist) {
+    private suspend fun applyPlaylist(
+        list: PlaylistConfig,
+        playlist: Playlist,
+        catalog: VodCatalog? = null,
+        catalogWarning: CatalogWarning? = null
+    ) {
+        // The stream-id matcher is needed before any lazy get_series_info call,
+        // including when the playlist was restored from the disk cache.
+        if (list.kind == PlaylistKind.XTREAM) {
+            runCatching { repository.registerChannels(list.id, playlist.channels) }
+        }
         val tab = defaultTab(playlist, _state.value.tab)
-        val filtered = withContext(Dispatchers.Default) {
-            filter(playlist, _state.value.query, tab, null, false)
+        val result = withContext(Dispatchers.Default) {
+            filter(
+                playlist = playlist,
+                catalog = catalog,
+                query = _state.value.query,
+                tab = tab,
+                group = null,
+                categoryId = _state.value.selectedVodCategory,
+                searchAll = false
+            )
         }
         val lastUpdated = list.lastLoadedAt
         _state.update { current ->
@@ -593,9 +903,19 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                         if (it.id == list.id) it.copy(lastLoadedAt = lastUpdated) else it
                     },
                     playlist = playlist,
-                    filteredChannels = filtered,
+                    catalog = catalog,
+                    catalogWarning = catalogWarning,
+                    filteredChannels = result.channels,
+                    filteredMovies = result.movies,
+                    filteredSeries = result.series,
                     tab = tab,
                     selectedGroup = null,
+                    selectedVodCategory = null,
+                    selectedSeries = null,
+                    seriesInfo = null,
+                    seriesLoading = false,
+                    seriesError = null,
+                    selectedSeason = null,
                     isLoading = false,
                     isReadingCache = false,
                     progressBytes = playlist.bytes,
@@ -615,38 +935,90 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             val snapshot = _state.value
             val result = withContext(Dispatchers.Default) {
                 filter(
-                    snapshot.playlist,
-                    snapshot.query,
-                    snapshot.tab,
-                    snapshot.selectedGroup,
-                    snapshot.searchAll
+                    playlist = snapshot.playlist,
+                    catalog = snapshot.catalog,
+                    query = snapshot.query,
+                    tab = snapshot.tab,
+                    group = snapshot.selectedGroup,
+                    categoryId = snapshot.selectedVodCategory,
+                    searchAll = snapshot.searchAll
                 )
             }
             _state.update { current ->
                 val unchanged = current.playlist === snapshot.playlist &&
+                    current.catalog === snapshot.catalog &&
                     current.query == snapshot.query &&
                     current.tab == snapshot.tab &&
                     current.selectedGroup == snapshot.selectedGroup &&
+                    current.selectedVodCategory == snapshot.selectedVodCategory &&
                     current.searchAll == snapshot.searchAll
-                if (unchanged) current.copy(filteredChannels = result) else current
+                if (unchanged) {
+                    current.copy(
+                        filteredChannels = result.channels,
+                        filteredMovies = result.movies,
+                        filteredSeries = result.series
+                    )
+                } else {
+                    current
+                }
             }
         }
     }
 
+    /** What the current tab renders, in whichever layout is selected. */
+    private data class FilterResult(
+        val channels: List<Channel>,
+        val movies: List<VodItem> = emptyList(),
+        val series: List<SeriesCard> = emptyList()
+    )
+
+    /**
+     * Filters the active tab. When the Xtream catalogue drives the tab (Movies
+     * or Series, catalogue loaded, no cross-type search) the catalogue is the
+     * item source for both layouts and the flat channel pass is skipped: it
+     * would be a second full scan of tens of thousands of entries whose result
+     * nothing renders. Everything else keeps today's channel filtering.
+     */
     private fun filter(
         playlist: Playlist?,
+        catalog: VodCatalog?,
         query: String,
         tab: SourceType?,
         group: String?,
+        categoryId: String?,
         searchAll: Boolean
-    ): List<Channel> {
-        val source = playlist ?: return emptyList()
+    ): FilterResult {
+        val source = playlist ?: return FilterResult(emptyList())
         val normalized = SearchNormalizer.query(query)
-        return source.channels.asSequence()
+
+        if (catalog != null && !searchAll &&
+            (tab == SourceType.MOVIE || tab == SourceType.SERIES)
+        ) {
+            val movies = if (tab == SourceType.MOVIE) {
+                catalog.movies.asSequence()
+                    .filter { categoryId == null || it.categoryId == categoryId }
+                    .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
+                    .toList()
+            } else {
+                emptyList()
+            }
+            val series = if (tab == SourceType.SERIES) {
+                catalog.series.asSequence()
+                    .filter { categoryId == null || it.categoryId == categoryId }
+                    .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
+                    .toList()
+            } else {
+                emptyList()
+            }
+            return FilterResult(emptyList(), movies, series)
+        }
+
+        val channels = source.channels.asSequence()
             .filter { searchAll || tab == null || it.sourceType == tab }
             .filter { group == null || it.group == group }
             .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
             .toList()
+        return FilterResult(channels)
     }
 
     /** Keeps the current tab when it has entries, otherwise picks the first non-empty one. */
@@ -668,12 +1040,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     override fun onCleared() {
         loadJob?.cancel()
         filterJob?.cancel()
+        seriesJob?.cancel()
         loadedPlaylists.clear()
+        loadedSeriesInfo.clear()
         super.onCleared()
     }
 
     private companion object {
         /** Parsed lists kept in RAM (the active one plus the previously used one). */
         const val MAX_LOADED_LISTS = 2
+
+        /** Series detail trees kept in RAM (a drill-down is one series at a time). */
+        const val MAX_LOADED_SERIES = 8
     }
 }

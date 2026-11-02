@@ -21,6 +21,21 @@ URL or Xtream server, one active list at a time, per-list cache) was approved
 and merged on 2026-11-01. It is in scope, and the older "single list only" rule
 is superseded.
 
+Explicit scope decision on record: **Xtream `player_api.php` catalogue for
+Movies/Series** was approved. For `PlaylistKind.XTREAM` lists the M3U download
+stays the source of playback URLs (it is requested with `output=m3u8`, so every
+movie/series URL is HLS), and the API contributes metadata only
+(`get_vod_streams`, `get_series`, category lists and the lazy
+`get_series_info`). Movies/Series render as a 3-column poster grid with a
+persisted list/grid toggle, provider category chips instead of group pills on
+those tabs, and a series drill-down (series -> seasons -> episodes) as its own
+screen. A `container_extension` URL (`.mkv`, `.avi`, ...) is never produced:
+unmatched catalogue ids fall back to the provider's own
+`<origin>/<type>/<user>/<pass>/<id>.m3u8` pattern. Plain-M3U (`PlaylistKind.URL`)
+lists are never augmented with API calls. If the API fails while the M3U works,
+the flat list is shown with a one-line warning; a load never fails because the
+catalogue could not be fetched.
+
 In scope:
 
 - One or more named list configurations, persisted locally, with a list picker
@@ -88,6 +103,11 @@ Consequences:
 - Default to Live so the first screen is small and fast.
 - Do not hide duplicates in v1. Show quality tags as text; variant grouping is v1.1.
 - VOD entries are not channels. The Live/Movies/Series tabs keep the product honest.
+- Poster grids use a fixed 3-column `LazyVerticalGrid`, stable keys
+  (`movie:<id>`, `series:<id>`), one `contentType` per grid, explicit Coil
+  `size()` matching the measured cell and a small prefetch window (8 posters).
+  No `SubcomposeAsyncImage` and no `BoxWithConstraints` per cell: the only
+  per-cell state is Coil's painter, never list data or derived values.
 
 ## Architecture target (v1)
 
@@ -152,7 +172,12 @@ Use this exact baseline unless an explicit decision changes it:
 
 Other verified versions: core-ktx 1.18.0, activity-compose 1.13.0,
 lifecycle 2.10.0, navigation-compose 2.9.8, DataStore 1.3.0, OkHttp 4.12.0,
-coroutines 1.11.0, Coil 3.6.3.
+coroutines 1.11.0, kotlinx-serialization-json 1.9.0, Coil **2.7.0**.
+
+Coil 2.7.0 is the version actually installed and used
+(`coil.compose.SubcomposeAsyncImage`, `AsyncImage`, `context.imageLoader`); the
+earlier "Coil 3.6.3" line here was aspirational. Do not migrate to Coil 3 as
+part of unrelated work.
 
 **Do not upgrade to AGP 9.x or Compose 1.12 yet.** Compose 1.12 requires
 compileSdk 37 and AGP 9.1+. AGP 9 uses built-in Kotlin and pins KGP 2.2.10,
@@ -216,17 +241,20 @@ one-line edits.
 | Build / sign / install | `apk-smith` | APK path, SHA-256, install result |
 | Review | `qa-reviewer` | findings by severity, pass/fail |
 | Brand / logo | `brand-designer` | generated logo concepts, chosen asset, brief |
+| UI / UX design | `ui-designer` | interaction spec, sizes, states, tradeoffs |
 | Risky decision | builtin `oracle` | second opinion (explicit use only) |
 
 Recommended loop:
 
 ```text
-clarify → scout → architect → (dev | iptv-engineer) → apk-smith → qa-reviewer
+clarify → scout → ui-designer → architect → (dev | iptv-engineer) → apk-smith → qa-reviewer
 ```
 
 Rules:
 
-- `android-architect` and `qa-reviewer` are read-only; they must not edit files.
+- `android-architect`, `ui-designer` and `qa-reviewer` are read-only for the app:
+  they must not edit code, resources or Gradle files. `ui-designer` may only write
+  interaction specs under `design/ui/`.
 - Implementation agents run a focused compile/build before reporting done.
 - `apk-smith` owns Gradle/build config, not app logic.
 - If a build error repeats twice, escalate the model (see below) or ask `oracle`.
@@ -249,6 +277,7 @@ uses; prices change, so check OpenRouter before budgeting.
 | `apk-smith` | `openrouter/z-ai/glm-5.3-flash` | high | 28 | 63% | ~$0.02/$0.15 | mechanical build loop, cheap |
 | `qa-reviewer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `brand-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | visual identity, image evaluation |
+| `ui-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | interaction design, states, judgment |
 | `reviewer` (builtin) | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `worker` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | generic implementation |
 | `delegate` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | lightweight delegate |
