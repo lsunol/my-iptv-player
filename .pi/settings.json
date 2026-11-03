@@ -12,14 +12,17 @@
     "defaultThinking": "medium",
     "maxThinking": "xhigh",
     "toolActivation": "eager",
+    "defaultSubagentOnlyExtensions": [
+      ".pi/extensions/free-first-router.ts"
+    ],
     "agentOverrides": {
       "scout": {
-        "model": "openrouter/z-ai/glm-5.3-flash",
+        "model": "openrouter/free-first",
         "thinking": "low",
         "advertise": true
       },
       "researcher": {
-        "model": "openrouter/z-ai/glm-5.3-flash",
+        "model": "openrouter/free-first",
         "thinking": "medium",
         "advertise": true
       },
@@ -38,12 +41,12 @@
         "advertise": true
       },
       "delegate": {
-        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "model": "openrouter/free-first",
         "thinking": "medium",
         "advertise": true
       },
       "evidence-auditor": {
-        "model": "openrouter/z-ai/glm-5.3-flash",
+        "model": "openrouter/free-first",
         "thinking": "low"
       }
     }

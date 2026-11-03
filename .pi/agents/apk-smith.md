@@ -2,8 +2,8 @@
 name: apk-smith
 description: Android build and delivery engineer for Open IPTV. Use to configure Gradle, build debug and release APKs, sign them, verify the artifact, install on a connected phone with adb, and diagnose build or install failures.
 tools: read, grep, find, ls, edit, write, bash
-model: openrouter/z-ai/glm-5.3-flash
-thinking: high
+model: openrouter/free-first
+thinking: medium
 advertise: true
 inheritProjectContext: true
 inheritSkills: true

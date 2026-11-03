@@ -268,29 +268,60 @@ uses; prices change, so check OpenRouter before budgeting.
 
 | Role | Model | Thinking | AA IQ† | Code‡ | Precio (in/out) | Why |
 |---|---|---|---|---|---|---|
-| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$1.60/$3.20 | orchestrator (routes to V4.1-Flash pricing) |
-| `scout` | `openrouter/z-ai/glm-5.3-flash` | low | 28 | 63% | ~$0.02/$0.15 | fast recon |
-| `researcher` | `openrouter/z-ai/glm-5.3-flash` | medium | 28 | 63% | ~$0.02/$0.15 | web synthesis |
+| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$0.90/$1.50 (caché $0.25) | orchestrator |
+| `scout` | `openrouter/free-first` | low | — | — | gratis → escala a pago | fast recon |
+| `researcher` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | web synthesis |
 | `android-architect` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | judgment, plan |
 | `android-dev` | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | Kotlin/Compose quality |
 | `iptv-engineer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | correctness-critical parsing |
-| `apk-smith` | `openrouter/z-ai/glm-5.3-flash` | high | 28 | 63% | ~$0.02/$0.15 | mechanical build loop, cheap |
+| `apk-smith` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | mechanical build loop |
 | `qa-reviewer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `brand-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | visual identity, image evaluation |
 | `ui-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | interaction design, states, judgment |
 | `reviewer` (builtin) | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `worker` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | generic implementation |
-| `delegate` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | lightweight delegate |
+| `delegate` (builtin) | `openrouter/free-first` | medium | — | — | gratis → escala a pago | lightweight delegate |
+| `evidence-auditor` (builtin) | `openrouter/free-first` | low | — | — | gratis → escala a pago | source checking |
 | `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | 58 | 74% | ~$4/$20 | expensive, explicit use only |
 
 † Artificial Analysis Intelligence Index v5.0 (0–100, general; mediana ≈ 23).
 ‡ DeepSWE v1.1 (abiertos) / ChatOSS Agentic Coding Index (Opus). Orientativo.
 
-Precios OpenRouter USD/1M tokens verificados contra la API el 2026-10-31.
+Precios OpenRouter USD/1M tokens. Los de la sesión principal están **medidos**
+sobre el coste real registrado el 2026-11-03: `deepseek-v4-pro` se factura a
+~$0,90/$1,50 con caché a $0,25/M (no a precio Flash: era ~100× más caro en
+entrada que `v4.1-flash`; `v4.1-flash` se ha visto a ~$0,0075/$0,67).
 Ojo: `defaultModel` (sesión principal) va SIN prefijo de proveedor
 (`deepseek/deepseek-v4-pro`); los modelos de subagentes sí llevan prefijo
-(`openrouter/z-ai/glm-5.3`). Desde 2026-09-14, `deepseek-v4-pro` redirige a
-V4.1-Flash con precio Flash hasta que salga V4.1-Pro.
+(`openrouter/z-ai/glm-5.3`).
+
+### Modelos gratuitos y failover (decisión 2026-11-03)
+
+`openrouter/free-first` es un **modelo virtual** que registra
+`.pi/extensions/free-first-router.ts`: intenta modelos `:free` de OpenRouter y,
+si fallan por cuota, rate limit o proveedor caído, **escala solo** a
+`deepseek/deepseek-v4.1-flash` y sigue la tarea. Sin ese failover no se usa un
+modelo gratuito: `pi-subagents` resuelve **un único modelo por lanzamiento** y no
+hace fallback (hay que relanzar explícitamente con otro modelo si un hijo falla).
+
+Reglas:
+
+- El tier gratuito de OpenRouter son **20 req/min** y **50 req/día** si la cuenta
+  compró < 10 créditos, o **1000 req/día** si compró ≥ 10 (esta cuenta: 1000).
+  Un run de agente completo son 6-10 requests.
+- Para comprobar cuota: `docs/TOKEN_AUDIT.md` §2.1 (no imprimir la clave).
+- Los hijos no heredan modelos virtuales: `subagents.defaultSubagentOnlyExtensions`
+  en `.pi/settings.json` los carga. Esas rutas se resuelven desde el **cwd del
+  hijo**, no desde `.pi/`, así que `.pi/extensions/free-first-router.ts` vale
+  mientras el hijo corra con la raíz del repo como cwd; desde otro cwd (worktree,
+  subdirectorio) hay que usar ruta absoluta. Si la extensión no carga, el hijo
+  manda `free-first` crudo a OpenRouter y falla con 400.
+- Un modelo gratuito que responde mal **no** dispara el failover: si la calidad
+  no basta, se cambia de modelo o se sube la tarea a un agente de pago.
+- La auditoría completa (consumo real, tarifas medidas, pruebas de los modelos
+  gratuitos) está en `docs/TOKEN_AUDIT.md`. El gasto está en el contexto del
+  orquestador (92% cache reads), no en los subagentes: compactar sesión ahorra
+  más que mover agentes a gratis.
 
 Escalation examples:
 
@@ -426,6 +457,18 @@ Read the matching skill before touching that area. Project skills live in
 - Still unverified: Android 7 devices, all three demo streams, real HTTP
   401/403/404 handling, and scrolling a large list by hand instead of with
   synthetic flings.
+- **2026-11-03 — auditoría de consumo y enrutado gratuito**: medido el coste real
+  de todas las sesiones del repo (7,99 USD: 6,05 el orquestador, 1,93 los
+  subagentes en 25 runs). Cinco modelos `:free` de OpenRouter resolvieron la misma
+  tarea de tool-calling en este repo con coste 0 y sin tocar ficheros del repo.
+  `openrouter/free-first` verificado en sesión principal (despacho a
+  `nemotron-3.5-lightning:free`), en la escalada (cadena inexistente y modelo sin
+  soporte de tools → `deepseek-v4.1-flash`, exit 0) y en hijos `scout` y `apk-smith`
+  lanzados con el modelo de configuración (coste 0). Los 1000 requests gratuitos
+  del día: 49 usados por todas las pruebas. Ruta de la extensión para hijos:
+  `.pi/extensions/free-first-router.ts`, relativa al **cwd** del hijo (no a
+  `.pi/`); verificada con un hijo `scout` en primer plano que despachó a
+  `nemotron-3.5-lightning:free` (exit 0, coste 0). Detalle en `docs/TOKEN_AUDIT.md`.
 
 ## Known traps
 
@@ -444,3 +487,11 @@ Read the matching skill before touching that area. Project skills live in
 8. **Duplicate channels**: expected. Do not dedupe silently in v1.
 9. **M3U encodings**: UTF-8 with BOM is common; some providers use Latin-1.
 10. **Relative URLs**: resolve against the playlist URL, not the app cwd.
+11. **Virtual models don't reach subagents by inheritance**: a child only gets
+   `openrouter/free-first` if the router extension is listed for it
+   (`subagents.defaultSubagentOnlyExtensions`). Those paths resolve from the
+   child's **cwd** (not from `.pi/`), so `.pi/extensions/free-first-router.ts`
+   works as long as children run with the repo root as cwd; from any other cwd
+   (worktree, subdirectory) use an absolute path. If the extension does not load
+   in the child, it sends `free-first` to OpenRouter and fails with
+   `400 free-first is not a valid model ID`.
