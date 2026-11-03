@@ -48,6 +48,11 @@
       "evidence-auditor": {
         "model": "openrouter/free-first",
         "thinking": "low"
+      },
+      "android-emulator": {
+        "model": "openrouter/free-first",
+        "thinking": "low",
+        "advertise": true
       }
     }
   }
