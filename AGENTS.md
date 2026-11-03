@@ -94,7 +94,14 @@ Assumptions the UI and parser must handle:
 
 Consequences:
 
-- Parse **off the main thread**, line by line. Never regex the whole document.
+- Download the playlist straight to a temp file on disk (16 KB copy buffer);
+  the raw document never enters the heap. Parse **off the main thread**, line
+  by line, from the file through a small reader. Never regex the whole
+  document. Startup parses the cached file the same way, never as a
+  `ByteArray` + `String`.
+- Peak memory therefore depends on the parsed channel count, not on the
+  document size. The `MAX_BYTES` download ceiling stays only as a disk /
+  anti-endless-stream guard, not a heap guard.
 - Never put a `remember`/state object inside a list row that can be repeated
   tens of thousands of times.
 - Use stable keys (hash of channel URL + display name) and `contentType`.

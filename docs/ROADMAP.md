@@ -37,6 +37,21 @@ is done, what is deliberately postponed, and what was discarded.
   (series -> seasons -> episodes). Episodes map to the existing `Channel` shape,
   so the player is unchanged. If the API fails while the M3U works, the flat
   list is shown with a one-line warning.
+- **Streamed playlist load/parse**: the download goes straight to a temp file
+  (16 KB copy buffer, never a byte array) and is then parsed line by line from
+  the file through a small reader; the raw document never enters the heap, so
+  peak memory depends only on the parsed channel count. The old cost was
+  actually raw bytes plus the decoded `String` (the `List<String>` of lines
+  `lineSequence()` was once blamed for never materialised one); a 35 MB list
+  paid ~70-140 MB of transient heap on top of the channels. The staged temp
+  file is committed to the per-list cache atomically after a fully successful
+  parse, so a failed Actualizar keeps the working cache. Startup parses the
+  cached file the same way instead of reading it into a `ByteArray`+`String`.
+  Charset policy: BOM > `Content-Type` charset > strict UTF-8 probe of the
+  first 256 KB; if a malformed sequence appears later (a Latin-1 list whose
+  accents live in the VOD groups), the file is re-read as ISO-8859-1 rather
+  than emitting U+FFFD. The `MAX_BYTES` download ceiling stays, but only as a
+  disk/anti-endless-stream guard, not a heap guard.
 
 ### Catalogue follow-ups (not done yet)
 
@@ -118,17 +133,6 @@ https://github.com/lsunol/my-iptv-player/releases/latest/download/app-release.ap
 Optional, once releases exist: submit to **IzzyOnDroid** (an F-Droid-compatible
 repo that consumes your already-signed release APK) and mention that
 **Obtainium** can follow the releases for automatic updates.
-
-## Next: parse the playlist as a stream
-
-Today the whole document is materialised before parsing: raw bytes, then a
-`String`, then a `List<String>` of lines, then the channels. For a 35 MB list
-that is a peak of a few hundred MB, which is why a byte ceiling has to exist at
-all. Streaming the response into a line-by-line parser, and writing the cache
-file as the bytes arrive, would drop the peak to roughly the parsed channels
-alone, and would let the byte ceiling go away. It also matches what
-`AGENTS.md` already asks for ("parse line by line, never regex the whole
-document"). Not urgent while real lists stay under ~35 MB.
 
 ## Suggested order
 

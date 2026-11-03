@@ -12,12 +12,25 @@ import dev.lluissunol.iptv.data.model.buildVodCatalog
 import dev.lluissunol.iptv.data.model.buildXtreamStreamUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.io.BufferedInputStream
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStreamReader
+import java.io.Reader
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CharsetDecoder
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.CharacterCodingException
 
 sealed class PlaylistException(message: String, cause: Throwable? = null) : Exception(message, cause) {
     class InvalidUrl : PlaylistException("URL no válida")
@@ -63,21 +76,49 @@ fun PlaylistException.userMessage(): String = when (this) {
 }
 
 /**
- * One successful load. [catalog] is only non-null for Xtream lists whose four
- * `player_api.php` calls succeeded after the M3U download; [catalogWarning]
- * describes the catalogue problem shown on that screen: the degradation when
- * the calls failed but the M3U is usable, or the first API decode warning (for
- * example skipped catalogue items) when the catalogue loaded imperfectly. It is
- * typed, never text; the UI owns the wording.
+ * Destination of the raw playlist downloaded by [PlaylistRepository.load]:
+ * implemented by [PlaylistCache.stage]. The repository streams the download
+ * into the staged temp file and either commits it atomically (after a fully
+ * successful parse) or discards it (failure or cancellation), so a failed
+ * refresh never destroys the working cache entry. Nothing here may log the
+ * downloaded content: it contains provider credentials.
+ */
+interface CacheTarget {
+    /** Returns a fresh temp file the download can stream into. */
+    suspend fun stageTempFile(): File
+
+    /**
+     * Installs the temp file as the new cached playlist. Returns false when it
+     * could not be installed; the load still succeeds (the cache is
+     * best-effort, as it always was).
+     */
+    suspend fun commit(tempFile: File): Boolean
+
+    /** Deletes the temp file after a failure or cancellation. */
+    suspend fun discard(tempFile: File)
+}
+
+/**
+ * One successful load. The raw document is never carried back to the caller:
+ * it was streamed to a temp file and committed to the cache (when a
+ * [CacheTarget] was given). [catalog] is only non-null for Xtream lists whose
+ * four `player_api.php` calls succeeded after the M3U download;
+ * [catalogWarning] describes the catalogue problem shown on that screen: the
+ * degradation when the calls failed but the M3U is usable, or the first API
+ * decode warning (for example skipped catalogue items) when the catalogue
+ * loaded imperfectly. It is typed, never text; the UI owns the wording.
  */
 data class LoadedPlaylist(
     val playlist: Playlist,
-    val rawBytes: ByteArray,
     val catalog: VodCatalog? = null,
     val catalogWarning: CatalogWarning? = null
 )
 
-class PlaylistRepository(private val client: OkHttpClient) {
+class PlaylistRepository(
+    private val client: OkHttpClient,
+    /** Directory for the download temp file when no [CacheTarget] is given. */
+    private val tempDir: File? = null
+) {
 
     private val xtreamClient = XtreamClient(client)
 
@@ -97,14 +138,27 @@ class PlaylistRepository(private val client: OkHttpClient) {
             size > MAX_CACHED_SERIES_INFO
     }
 
-    fun parseCached(bytes: ByteArray, baseUrl: String): Playlist {
-        val text = decode(bytes, null).removePrefix("\uFEFF")
-        return PlaylistParser.parse(text, baseUrl, bytes.size.toLong())
-    }
+    /**
+     * Parses a playlist previously cached on disk (see [PlaylistCache])
+     * without materialising it in memory: the file is consumed line by line
+     * through a small reader. [Playlist.bytes] is the file size. Blocking;
+     * callers run it off the main thread.
+     */
+    fun parseCached(file: File, baseUrl: String): Playlist =
+        parseFile(file, baseUrl, contentType = null)
 
+    /**
+     * Downloads the playlist into a temp file -- never into a byte array --
+     * and then parses it from the file. Peak memory is the parsed channel
+     * model, not the document size. When [cacheTarget] is given the temp file
+     * *is* the staged cache entry: it is committed atomically after a fully
+     * successful parse and discarded on any failure or cancellation, so the
+     * working cache survives a bad refresh.
+     */
     suspend fun load(
         url: String,
-        onProgress: (bytesRead: Long, totalBytes: Long, parsedEntries: Int) -> Unit
+        onProgress: (bytesRead: Long, totalBytes: Long, parsedEntries: Int) -> Unit,
+        cacheTarget: CacheTarget? = null
     ): LoadedPlaylist = withContext(Dispatchers.IO) {
         val trimmed = url.trim()
         if (!trimmed.startsWith("http://", ignoreCase = true) &&
@@ -119,6 +173,9 @@ class PlaylistRepository(private val client: OkHttpClient) {
             .header("Accept", ACCEPT)
             .build()
 
+        val temp = cacheTarget?.stageTempFile()
+            ?: File.createTempFile("playlist", ".tmp", tempDir)
+        var committed = false
         try {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw PlaylistException.Http(response.code)
@@ -131,52 +188,216 @@ class PlaylistRepository(private val client: OkHttpClient) {
                 val body = response.body
                     ?: throw PlaylistException.Unknown(IOException("Respuesta sin cuerpo"))
                 val total = body.contentLength()
-                // Sized from the declared length so the common case allocates
-                // once and never grows.
-                val sink = ByteSink(
-                    if (total in 1..MAX_BYTES) total.toInt() else MIN_BUFFER
-                )
+                var size = 0L
                 body.byteStream().use { input ->
-                    val buffer = ByteArray(16 * 1024)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        if (sink.size + count > MAX_BYTES) {
-                            throw PlaylistException.TooLarge((sink.size + count).toLong())
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(DOWNLOAD_BUFFER_BYTES)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            size += count.toLong()
+                            if (size > MAX_BYTES) {
+                                throw PlaylistException.TooLarge(size)
+                            }
+                            output.write(buffer, 0, count)
+                            onProgress(size, total, 0)
                         }
-                        sink.write(buffer, 0, count)
-                        onProgress(sink.size.toLong(), total, 0)
                     }
                 }
 
-                val bytes = sink.take()
-                val text = decode(bytes, contentType).removePrefix("\uFEFF")
-                val head = text.trimStart().take(64).lowercase()
-                if (head.startsWith("<!doctype") || head.startsWith("<html")) {
-                    throw PlaylistException.Html()
-                }
+                if (looksLikeHtml(temp)) throw PlaylistException.Html()
 
                 val finalUrl = response.request.url.toString()
-                val playlist = PlaylistParser.parse(
-                    text = text,
-                    baseUrl = finalUrl,
-                    bytes = bytes.size.toLong()
-                ) { entries -> onProgress(bytes.size.toLong(), bytes.size.toLong(), entries) }
+                val playlist = parseFile(temp, finalUrl, contentType) { entries ->
+                    onProgress(size, size, entries)
+                }
 
                 if (playlist.channels.isEmpty()) throw PlaylistException.Empty()
-                LoadedPlaylist(playlist, bytes)
+                if (cacheTarget != null && coroutineContext.isActive) {
+                    // Commit only while this load is still wanted: a load
+                    // cancelled by a list switch, an edit or screen exit must
+                    // not install a cache entry for a list the user may since
+                    // have deleted or re-pointed. There is no suspension point
+                    // between this check and the commit's return, so a load
+                    // that passes it always finishes committing; a cancelled
+                    // one skips it and its staged temp is discarded below.
+                    // (Deliberate decision: a cancelled load discards; the
+                    // next open of the list re-downloads.)
+                    committed = runCatching { cacheTarget.commit(temp) }.getOrDefault(false)
+                }
+                LoadedPlaylist(playlist)
             }
+        } catch (e: CancellationException) {
+            // A cancel (list switch, screen exit) must surface as such, never
+            // as an error; the finally block discards the temp file.
+            throw e
         } catch (e: PlaylistException) {
             throw e
         } catch (e: IOException) {
             throw PlaylistException.Network(e)
         } catch (e: OutOfMemoryError) {
-            // A legal but very large playlist can exceed the heap. Report it as a
-            // readable failure instead of letting the process die.
+            // A legal but very large playlist can exceed the heap. The channel
+            // model is the real ceiling now that the document lives on disk;
+            // report it as a readable failure instead of letting the process die.
             throw PlaylistException.OutOfMemory()
         } catch (e: Exception) {
             throw PlaylistException.Unknown(e)
+        } finally {
+            if (!committed) {
+                runCatching {
+                    if (cacheTarget != null) cacheTarget.discard(temp) else temp.delete()
+                }
+            }
         }
+    }
+
+    // ------------------------------------------------------ file parsing
+
+    /**
+     * Parses a downloaded or cached playlist file with the full charset policy:
+     * BOM first, then a declared `Content-Type` charset, then a strict UTF-8
+     * probe of the first [PROBE_BYTES] bytes. The real parse also decodes
+     * strictly; if a malformed sequence shows up beyond the probe window (a
+     * Latin-1 list whose first 256 KB is pure ASCII, accents only in later
+     * VOD groups), the whole file is re-read as ISO-8859-1 instead of emitting
+     * U+FFFD replacement characters.
+     */
+    private fun parseFile(
+        file: File,
+        baseUrl: String,
+        contentType: String?,
+        onProgress: ((parsedEntries: Int) -> Unit)? = null
+    ): Playlist {
+        val bytes = file.length()
+        val charset = decideCharset(file, contentType)
+        val progress = onProgress ?: {}
+        return try {
+            PlaylistParser.parse(readerFor(file, charset), baseUrl, bytes, progress)
+        } catch (e: CharacterCodingException) {
+            if (charset != Charsets.UTF_8) throw PlaylistException.Malformed(e)
+            // Known behaviour delta (documented, not "fixed"): the second pass
+            // re-emits onProgress from the parsed-entry count it reaches, so
+            // for a misdetected encoding the UI's entry count can climb, drop
+            // back and climb again. Cosmetic: the tick after the parse loop is
+            // the authoritative count.
+            PlaylistParser.parse(readerFor(file, Charsets.ISO_8859_1), baseUrl, bytes, progress)
+        }
+    }
+
+    /**
+     * A reader over the whole file that decodes [charset] strictly: malformed
+     * input throws [CharacterCodingException] out of `readLine()` instead of
+     * silently producing U+FFFD characters in channel names and groups.
+     */
+    private fun readerFor(file: File, charset: Charset): Reader =
+        InputStreamReader(
+            BufferedInputStream(FileInputStream(file), 32 * 1024),
+            strictDecoder(charset)
+        )
+
+    private fun strictDecoder(charset: Charset): CharsetDecoder =
+        charset.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+
+    /**
+     * BOM > declared Content-Type charset > strict UTF-8 probe of the first
+     * [PROBE_BYTES] bytes. The UTF-8 BOM decodes to a U+FEFF the parser strips
+     * from the first line; UTF-16 BOMs select their endianness directly.
+     */
+    private fun decideCharset(file: File, contentType: String?): Charset {
+        val head = ByteArray(4)
+        val seen = readPrefix(file, head)
+        if (seen >= 2 && head[0] == 0xFF.toByte() && head[1] == 0xFE.toByte()) {
+            return Charsets.UTF_16LE
+        }
+        if (seen >= 2 && head[0] == 0xFE.toByte() && head[1] == 0xFF.toByte()) {
+            return Charsets.UTF_16BE
+        }
+        if (seen >= 3 && head[0] == 0xEF.toByte() &&
+            head[1] == 0xBB.toByte() && head[2] == 0xBF.toByte()
+        ) {
+            return Charsets.UTF_8
+        }
+        val declared = contentType
+            ?.substringAfter("charset=", "")
+            ?.substringBefore(';')
+            ?.trim()
+            ?.trim('"')
+        if (!declared.isNullOrBlank()) {
+            return try {
+                Charset.forName(declared)
+            } catch (_: Exception) {
+                Charsets.UTF_8
+            }
+        }
+        return if (isUtf8Prefix(file)) Charsets.UTF_8 else Charsets.ISO_8859_1
+    }
+
+    /**
+     * Strictly decodes the first [PROBE_BYTES] of the file: a malformed
+     * sequence inside the window means the file is not UTF-8. A multi-byte
+     * character cut exactly at the window edge is tolerated (up to 3 trailing
+     * bytes) because the real parse decodes strictly and falls back if the
+     * character turns out malformed after all -- being lenient at the edge
+     * costs at most one extra pass, never a wrong decode.
+     */
+    private fun isUtf8Prefix(file: File): Boolean = try {
+        FileInputStream(file).use { input ->
+            val prefix = ByteArray(PROBE_BYTES)
+            val total = readFully(input, prefix)
+            val decoder = strictDecoder(Charsets.UTF_8)
+            val bytes = ByteBuffer.wrap(prefix, 0, total)
+            val result = decoder.decode(bytes, CharBuffer.allocate(total + 1), true)
+            // decode(ByteBuffer, CharBuffer, boolean) stops with the buffer's
+            // position on the offending byte, so the trailing distance is
+            // public API: (total - bytes.position()).
+            result.isUnderflow ||
+                (result.isMalformed && total == PROBE_BYTES &&
+                    (total - bytes.position()) <= 3)
+        }
+    } catch (_: IOException) {
+        false
+    }
+
+    private fun readPrefix(file: File, buffer: ByteArray): Int = try {
+        FileInputStream(file).use { input -> readFully(input, buffer) }
+    } catch (_: IOException) {
+        0
+    }
+
+    private fun readFully(input: FileInputStream, buffer: ByteArray): Int {
+        var total = 0
+        while (total < buffer.size) {
+            val read = input.read(buffer, total, buffer.size - total)
+            if (read < 0) break
+            total += read
+        }
+        return total
+    }
+
+    /**
+     * A 200 HTML page is not a playlist: sniff the start of the file. The head
+     * is decoded with the same charset policy the parse uses ([decideCharset]):
+     * a UTF-8 BOM is EF BB BF on the wire, which decodes as three Latin-1
+     * characters instead of U+FEFF when read naively as ISO-8859-1, so a sniff
+     * that only strips U+FEFF would let a BOM-prefixed HTML error page with
+     * a non-`text/html` Content-Type slip through and surface as a misleading
+     * `Empty` error.
+     */
+    private fun looksLikeHtml(file: File): Boolean = try {
+        FileInputStream(file).use { input ->
+            val head = ByteArray(HTML_SNIFF_BYTES)
+            val total = readFully(input, head)
+            val text = String(head, 0, total, decideCharset(file, contentType = null))
+                .removePrefix("\uFEFF")
+                .trimStart()
+                .take(64)
+                .lowercase(java.util.Locale.ROOT)
+            text.startsWith("<!doctype") || text.startsWith("<html")
+        }
+    } catch (_: IOException) {
+        false
     }
 
     // ------------------------------------------------------ Xtream catalogue
@@ -193,10 +414,11 @@ class PlaylistRepository(private val client: OkHttpClient) {
      */
     suspend fun loadWithCatalog(
         config: PlaylistConfig,
-        onProgress: (bytesRead: Long, totalBytes: Long, parsedEntries: Int) -> Unit
+        onProgress: (bytesRead: Long, totalBytes: Long, parsedEntries: Int) -> Unit,
+        cacheTarget: CacheTarget? = null
     ): LoadedPlaylist {
         val url = config.effectiveUrl ?: throw PlaylistException.InvalidUrl()
-        val loaded = load(url, onProgress)
+        val loaded = load(url, onProgress, cacheTarget)
         if (config.kind != PlaylistKind.XTREAM) return loaded
 
         val matcher = withContext(Dispatchers.Default) {
@@ -269,8 +491,8 @@ class PlaylistRepository(private val client: OkHttpClient) {
 
     /**
      * The seasons and episodes of one series, fetched lazily on first open and
-     * cached in memory for the session. Episode playback URLs resolve from
-     * the M3U matcher; unmatched ids fall back to the provider's own
+     * cached in memory for the session. Episode playback URLs resolve from the
+     * M3U matcher; unmatched ids fall back to the provider's own
      * `.m3u8` pattern. Throws [PlaylistException] so the caller can show the
      * standard actionable error.
      */
@@ -304,73 +526,32 @@ class PlaylistRepository(private val client: OkHttpClient) {
         synchronized(seriesInfoCache) { seriesInfoCache.keys.removeIf { it.startsWith("$listId:") } }
     }
 
-    private fun decode(bytes: ByteArray, contentType: String?): String {
-        val charset = contentType
-            ?.substringAfter("charset=", "")
-            ?.substringBefore(';')
-            ?.trim()
-            ?.trim('"')
-        if (!charset.isNullOrBlank()) {
-            return try {
-                String(bytes, charset(charset))
-            } catch (_: Exception) {
-                String(bytes, Charsets.UTF_8)
-            }
-        }
-        val utf8 = String(bytes, Charsets.UTF_8)
-        return if (utf8.contains('\uFFFD')) String(bytes, Charsets.ISO_8859_1) else utf8
-    }
-
-    private fun charset(name: String): java.nio.charset.Charset =
-        java.nio.charset.Charset.forName(name)
-
     companion object {
         const val USER_AGENT = "OpenIPTV/0.1 (Android)"
         const val ACCEPT = "application/x-mpegURL, application/vnd.apple.mpegurl, text/plain, */*"
 
         /**
-         * Upper bound on a downloaded playlist. It exists to stop a hostile or
-         * broken URL feeding an unbounded stream into memory, not to size the
-         * app's appetite: real provider dumps reach ~35 MB. It is deliberately
-         * far above those. It is not a substitute for the heap ceiling either --
-         * a list that cannot fit fails with [PlaylistException.OutOfMemory]
-         * instead of killing the process.
+         * Upper bound on a downloaded playlist, in bytes written to the temp
+         * file. Since the download streams straight to disk this is no longer
+         * a heap guard; it exists to stop a hostile or broken URL feeding an
+         * endless (or enormous) stream into device storage. Real provider
+         * dumps reach ~35 MB and it stays deliberately far above them. It is
+         * not a substitute for the heap ceiling either -- a list whose channel
+         * model cannot fit fails with [PlaylistException.OutOfMemory] instead
+         * of killing the process.
          */
         const val MAX_BYTES = 128L * 1024 * 1024
 
+        /** Bytes the strict UTF-8 probe inspects before committing to UTF-8. */
+        private const val PROBE_BYTES = 256 * 1024
+
+        /** Download copy buffer. */
+        private const val DOWNLOAD_BUFFER_BYTES = 16 * 1024
+
+        /** Bytes inspected by the HTML sniff. */
+        private const val HTML_SNIFF_BYTES = 256
+
         /** Series detail trees kept in memory (see [seriesInfoCache]). */
         private const val MAX_CACHED_SERIES_INFO = 32
-
-        private const val MIN_BUFFER = 1 shl 20
-    }
-}
-
-/**
- * Growable byte sink that hands its array over without a final copy. Building a
- * multi-megabyte playlist through a [java.io.ByteArrayOutputStream] allocates the
- * document twice: once in the builder and again in the array it returns.
- */
-internal class ByteSink(initialCapacity: Int) {
-    private var array = ByteArray(initialCapacity.coerceAtLeast(MIN_CAPACITY))
-
-    var size = 0
-        private set
-
-    fun write(source: ByteArray, offset: Int, length: Int) {
-        val required = size + length
-        if (required > array.size) {
-            var next = array.size
-            while (next < required) next = next shl 1
-            array = array.copyOf(next)
-        }
-        System.arraycopy(source, offset, array, size, length)
-        size = required
-    }
-
-    /** The buffer, copied only when it was over-allocated. */
-    fun take(): ByteArray = if (size == array.size) array else array.copyOf(size)
-
-    private companion object {
-        const val MIN_CAPACITY = 1 shl 16
     }
 }
