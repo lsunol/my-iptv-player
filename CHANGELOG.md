@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+- Large playlists no longer need to fit in memory to be loaded. The download is
+  streamed straight to a file and parsed line by line from there, so peak memory
+  now depends on the number of channels and not on the size of the document that
+  describes them (a 35 MB list used to cost ~70-140 MB of transient heap on top
+  of the channels). The 128 MiB ceiling is kept, now as a disk guard against a
+  server that never stops sending. Startup from the cache reads the file the same
+  way instead of loading it whole.
+- Playlists are decoded with a stricter charset policy: byte order marks
+  (UTF-8 and UTF-16) are honoured, and a list whose accents only appear after an
+  all-ASCII beginning is re-read as ISO-8859-1 instead of showing replacement
+  characters in channel and group names. A server that declares a charset the
+  document does not actually use now fails with a readable error rather than
+  quietly corrupting names.
+- Fixed a UTF-8 byte order mark hiding an HTML error page, which was reported as
+  an empty playlist instead of "the URL returned a web page".
+
 ## [0.3.0] - 2026-11-02
 
 - Added multiple named lists (M3U URL or Xtream), with a picker, per-list cache

@@ -21,5 +21,10 @@ class OpenTvApplication : Application() {
             .build()
     }
 
-    val playlistRepository: PlaylistRepository by lazy { PlaylistRepository(httpClient) }
+    // cacheDir holds the download temp file used when a load has no cache
+    // target; it is the app's own cache directory, cleared by the system when
+    // storage runs low.
+    val playlistRepository: PlaylistRepository by lazy {
+        PlaylistRepository(httpClient, cacheDir)
+    }
 }

@@ -94,7 +94,14 @@ Assumptions the UI and parser must handle:
 
 Consequences:
 
-- Parse **off the main thread**, line by line. Never regex the whole document.
+- Download the playlist straight to a temp file on disk (16 KB copy buffer);
+  the raw document never enters the heap. Parse **off the main thread**, line
+  by line, from the file through a small reader. Never regex the whole
+  document. Startup parses the cached file the same way, never as a
+  `ByteArray` + `String`.
+- Peak memory therefore depends on the parsed channel count, not on the
+  document size. The `MAX_BYTES` download ceiling stays only as a disk /
+  anti-endless-stream guard, not a heap guard.
 - Never put a `remember`/state object inside a list row that can be repeated
   tens of thousands of times.
 - Use stable keys (hash of channel URL + display name) and `contentType`.
@@ -268,29 +275,60 @@ uses; prices change, so check OpenRouter before budgeting.
 
 | Role | Model | Thinking | AA IQ† | Code‡ | Precio (in/out) | Why |
 |---|---|---|---|---|---|---|
-| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$1.60/$3.20 | orchestrator (routes to V4.1-Flash pricing) |
-| `scout` | `openrouter/z-ai/glm-5.3-flash` | low | 28 | 63% | ~$0.02/$0.15 | fast recon |
-| `researcher` | `openrouter/z-ai/glm-5.3-flash` | medium | 28 | 63% | ~$0.02/$0.15 | web synthesis |
+| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$0.90/$1.50 (caché $0.25) | orchestrator |
+| `scout` | `openrouter/free-first` | low | — | — | gratis → escala a pago | fast recon |
+| `researcher` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | web synthesis |
 | `android-architect` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | judgment, plan |
 | `android-dev` | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | Kotlin/Compose quality |
 | `iptv-engineer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | correctness-critical parsing |
-| `apk-smith` | `openrouter/z-ai/glm-5.3-flash` | high | 28 | 63% | ~$0.02/$0.15 | mechanical build loop, cheap |
+| `apk-smith` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | mechanical build loop |
 | `qa-reviewer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `brand-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | visual identity, image evaluation |
 | `ui-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | interaction design, states, judgment |
 | `reviewer` (builtin) | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
 | `worker` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | generic implementation |
-| `delegate` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | lightweight delegate |
+| `delegate` (builtin) | `openrouter/free-first` | medium | — | — | gratis → escala a pago | lightweight delegate |
+| `evidence-auditor` (builtin) | `openrouter/free-first` | low | — | — | gratis → escala a pago | source checking |
 | `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | 58 | 74% | ~$4/$20 | expensive, explicit use only |
 
 † Artificial Analysis Intelligence Index v5.0 (0–100, general; mediana ≈ 23).
 ‡ DeepSWE v1.1 (abiertos) / ChatOSS Agentic Coding Index (Opus). Orientativo.
 
-Precios OpenRouter USD/1M tokens verificados contra la API el 2026-10-31.
+Precios OpenRouter USD/1M tokens. Los de la sesión principal están **medidos**
+sobre el coste real registrado el 2026-11-03: `deepseek-v4-pro` se factura a
+~$0,90/$1,50 con caché a $0,25/M (no a precio Flash: era ~100× más caro en
+entrada que `v4.1-flash`; `v4.1-flash` se ha visto a ~$0,0075/$0,67).
 Ojo: `defaultModel` (sesión principal) va SIN prefijo de proveedor
 (`deepseek/deepseek-v4-pro`); los modelos de subagentes sí llevan prefijo
-(`openrouter/z-ai/glm-5.3`). Desde 2026-09-14, `deepseek-v4-pro` redirige a
-V4.1-Flash con precio Flash hasta que salga V4.1-Pro.
+(`openrouter/z-ai/glm-5.3`).
+
+### Modelos gratuitos y failover (decisión 2026-11-03)
+
+`openrouter/free-first` es un **modelo virtual** que registra
+`.pi/extensions/free-first-router.ts`: intenta modelos `:free` de OpenRouter y,
+si fallan por cuota, rate limit o proveedor caído, **escala solo** a
+`deepseek/deepseek-v4.1-flash` y sigue la tarea. Sin ese failover no se usa un
+modelo gratuito: `pi-subagents` resuelve **un único modelo por lanzamiento** y no
+hace fallback (hay que relanzar explícitamente con otro modelo si un hijo falla).
+
+Reglas:
+
+- El tier gratuito de OpenRouter son **20 req/min** y **50 req/día** si la cuenta
+  compró < 10 créditos, o **1000 req/día** si compró ≥ 10 (esta cuenta: 1000).
+  Un run de agente completo son 6-10 requests.
+- Para comprobar cuota: `docs/TOKEN_AUDIT.md` §2.1 (no imprimir la clave).
+- Los hijos no heredan modelos virtuales: `subagents.defaultSubagentOnlyExtensions`
+  en `.pi/settings.json` los carga. Esas rutas se resuelven desde el **cwd del
+  hijo**, no desde `.pi/`, así que `.pi/extensions/free-first-router.ts` vale
+  mientras el hijo corra con la raíz del repo como cwd; desde otro cwd (worktree,
+  subdirectorio) hay que usar ruta absoluta. Si la extensión no carga, el hijo
+  manda `free-first` crudo a OpenRouter y falla con 400.
+- Un modelo gratuito que responde mal **no** dispara el failover: si la calidad
+  no basta, se cambia de modelo o se sube la tarea a un agente de pago.
+- La auditoría completa (consumo real, tarifas medidas, pruebas de los modelos
+  gratuitos) está en `docs/TOKEN_AUDIT.md`. El gasto está en el contexto del
+  orquestador (92% cache reads), no en los subagentes: compactar sesión ahorra
+  más que mover agentes a gratis.
 
 Escalation examples:
 
@@ -423,9 +461,42 @@ Read the matching skill before touching that area. Project skills live in
   heap was ~220 MB -- that, not the byte guard, is the real ceiling for a list
   this size. Fast synthetic flings janked ~12-15% of frames (p50 8 ms, p90
   16-21 ms).
+- **2026-11-03 — streaming parse, measured on an emulator (A/B)**: a synthetic
+  32.2 MB / 165,000-entry list (`scripts/generate-large-playlist.mjs`, served
+  from the host over `10.0.2.2`) on `emulator-5554` (`sdk_gphone64_x86_64`,
+  API 36, the AVD's stock 192 MB Java heap growth limit), the same list and the
+  same procedure on both builds, `dumpsys meminfo` **Dalvik Heap** sampled
+  throughout. Opening the cached list: **168.1 MB** peak before the change,
+  **75.9 MB** after it. The old path jumped to 98.3 MB in a single step (the
+  document materialised) and settled at 74.4 MB once the parse was done, i.e.
+  ~92 MB of transient scaffolding over a 32 MB file — 32 MB of bytes plus the
+  ~64 MB `String` built from them. First network load after the change: 78.4 MB.
+  `Actualizar` with the list already loaded: **the old build crashed** with
+  `FATAL EXCEPTION: java.lang.OutOfMemoryError` at 191.8 MB (it would have
+  finished on a device whose heap limit is larger, at roughly twice the channel
+  model); the new build peaked at **147.2 MB**, finished, advanced the header
+  timestamp and rendered 165,000 channels (Live/Movies/Series 55.0k each). A
+  refresh holding two channel models at once is by design: the old list stays
+  until the new one parses, which is what makes a failed refresh harmless.
+  Deleting the test list left no `.tmp`/`.copy` staging file in `filesDir`.
+  Emulator numbers are not comparable with the Galaxy S25 numbers above; what is
+  comparable is old against new on the same device.
 - Still unverified: Android 7 devices, all three demo streams, real HTTP
-  401/403/404 handling, and scrolling a large list by hand instead of with
-  synthetic flings.
+  401/403/404 handling, scrolling a large list by hand instead of with synthetic
+  flings, and the streaming-parse heap measurement on a physical phone rather
+  than an emulator.
+- **2026-11-03 — auditoría de consumo y enrutado gratuito**: medido el coste real
+  de todas las sesiones del repo (7,99 USD: 6,05 el orquestador, 1,93 los
+  subagentes en 25 runs). Cinco modelos `:free` de OpenRouter resolvieron la misma
+  tarea de tool-calling en este repo con coste 0 y sin tocar ficheros del repo.
+  `openrouter/free-first` verificado en sesión principal (despacho a
+  `nemotron-3.5-lightning:free`), en la escalada (cadena inexistente y modelo sin
+  soporte de tools → `deepseek-v4.1-flash`, exit 0) y en hijos `scout` y `apk-smith`
+  lanzados con el modelo de configuración (coste 0). Los 1000 requests gratuitos
+  del día: 49 usados por todas las pruebas. Ruta de la extensión para hijos:
+  `.pi/extensions/free-first-router.ts`, relativa al **cwd** del hijo (no a
+  `.pi/`); verificada con un hijo `scout` en primer plano que despachó a
+  `nemotron-3.5-lightning:free` (exit 0, coste 0). Detalle en `docs/TOKEN_AUDIT.md`.
 
 ## Known traps
 
@@ -444,3 +515,11 @@ Read the matching skill before touching that area. Project skills live in
 8. **Duplicate channels**: expected. Do not dedupe silently in v1.
 9. **M3U encodings**: UTF-8 with BOM is common; some providers use Latin-1.
 10. **Relative URLs**: resolve against the playlist URL, not the app cwd.
+11. **Virtual models don't reach subagents by inheritance**: a child only gets
+   `openrouter/free-first` if the router extension is listed for it
+   (`subagents.defaultSubagentOnlyExtensions`). Those paths resolve from the
+   child's **cwd** (not from `.pi/`), so `.pi/extensions/free-first-router.ts`
+   works as long as children run with the repo root as cwd; from any other cwd
+   (worktree, subdirectory) use an absolute path. If the extension does not load
+   in the child, it sends `free-first` to OpenRouter and fails with
+   `400 free-first is not a valid model ID`.

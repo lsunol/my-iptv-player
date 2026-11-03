@@ -5,12 +5,17 @@ import dev.lluissunol.iptv.data.model.GroupCount
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.SourceType
 import dev.lluissunol.iptv.data.model.qualityTagOf
+import java.io.BufferedReader
+import java.io.Reader
+import java.io.StringReader
 import java.net.URI
 import java.util.Locale
 
 /**
  * Streaming-friendly M3U/M3U8 parser. It never regexes the whole document and
- * keeps only the channel model, not the raw multi-megabyte text.
+ * keeps only the channel model, not the raw multi-megabyte text. The reader
+ * entry point consumes the document line by line through a small buffer, so
+ * peak memory is the channel list itself, whatever the playlist's byte size.
  */
 object PlaylistParser {
 
@@ -28,8 +33,27 @@ object PlaylistParser {
         val tvgName: String?
     )
 
+    /**
+     * Parses a playlist whose text is already in memory. Thin wrapper over
+     * the reader entry point, kept so callers and tests that hold a String
+     * keep working unchanged.
+     */
     fun parse(
         text: String,
+        baseUrl: String? = null,
+        bytes: Long = 0L,
+        onProgress: (parsedEntries: Int) -> Unit = {}
+    ): Playlist = parse(StringReader(text), baseUrl, bytes, onProgress)
+
+    /**
+     * Parses a playlist from a character stream, line by line.
+     * [BufferedReader.readLine] handles `\n`, `\r\n` and `\r`, and keeps
+     * lines that span the reader's buffer boundaries intact -- line splitting
+     * is never hand-rolled. A BOM is stripped from the very first line only,
+     * wherever the stream happens to split it.
+     */
+    fun parse(
+        reader: Reader,
         baseUrl: String? = null,
         bytes: Long = 0L,
         onProgress: (parsedEntries: Int) -> Unit = {}
@@ -42,75 +66,94 @@ object PlaylistParser {
         var pending: Pending? = null
         var lineNumber = 0
         var index = 0
+        var firstLine = true
 
-        text.removePrefix("\uFEFF").lineSequence().forEach { raw ->
-            lineNumber++
-            val line = raw.trim()
-            if (line.isEmpty()) return@forEach
-
-            when {
-                line.startsWith("#EXTM3U") -> Unit
-                line.startsWith("#EXTINF:") -> {
-                    val (head, displayName) = splitExtInf(line.substring(8))
-                    val attrs = parseAttributes(head)
-                    val name = displayName.ifBlank {
-                        attrs["tvg-name"] ?: attrs["tvg-id"] ?: "Canal sin nombre"
-                    }.trim()
-                    pending = Pending(
-                        name = name,
-                        group = (attrs["group-title"] ?: attrs["group"])?.takeIf { it.isNotBlank() },
-                        logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
-                        tvgId = attrs["tvg-id"]?.takeIf { it.isNotBlank() },
-                        tvgName = attrs["tvg-name"]?.takeIf { it.isNotBlank() }
-                    )
+        BufferedReader(reader).use { buffer ->
+            while (true) {
+                val raw = buffer.readLine() ?: break
+                lineNumber++
+                var line = raw.trim()
+                if (firstLine) {
+                    line = line.removePrefix("\uFEFF")
+                    firstLine = false
+                }
+                if (line.isEmpty()) {
+                    // Blank lines still advance the line counter and with it
+                    // the progress cadence below. (The old lineSequence()-based
+                    // path returned before the tick, so this is a documented
+                    // behaviour delta: the cadence counts lines read, including
+                    // blanks -- harmless and arguably more correct, since the
+                    // tick tracks reader position, not entry count.)
+                    if (lineNumber % 1000 == 0) onProgress(channels.size)
+                    continue
                 }
 
-                line.startsWith("#EXTGRP:") -> {
-                    val group = line.substring(8).trim()
-                    if (group.isNotEmpty()) pending = pending?.copy(group = group)
-                }
-
-                line.startsWith("#") -> Unit
-
-                else -> {
-                    val entry = pending
-                    if (entry == null) {
-                        addWarning(warnings, "Línea $lineNumber: URL sin #EXTINF, ignorada.")
-                    } else {
-                        val resolved = resolveUrl(line, baseUrl)
-                        if (resolved == null) {
-                            addWarning(warnings, "Línea $lineNumber: URL no válida, ignorada.")
-                        } else {
-                            val type = classify(resolved, entry.group)
-                            val channel = Channel(
-                                id = buildId(resolved, entry.name, index),
-                                name = entry.name,
-                                url = resolved,
-                                group = entry.group,
-                                logoUrl = entry.logo,
-                                tvgId = entry.tvgId,
-                                sourceType = type,
-                                searchKey = SearchNormalizer.key(
-                                    "${entry.name} ${entry.tvgName.orEmpty()} ${entry.group.orEmpty()}"
-                                ),
-                                qualityTag = qualityTagOf(entry.name),
-                                favoriteKey = buildFavoriteKey(entry.tvgId, resolved)
-                            )
-                            channels += channel
-                            counts[type] = (counts[type] ?: 0) + 1
-                            entry.group?.let { group ->
-                                groupCounts[group] = (groupCounts[group] ?: 0) + 1
-                                val byType = groupCountsByType.getOrPut(type) { HashMap() }
-                                byType[group] = (byType[group] ?: 0) + 1
-                            }
-                            index++
-                        }
+                when {
+                    line.startsWith("#EXTM3U") -> Unit
+                    line.startsWith("#EXTINF:") -> {
+                        val (head, displayName) = splitExtInf(line.substring(8))
+                        val attrs = parseAttributes(head)
+                        val name = displayName.ifBlank {
+                            attrs["tvg-name"] ?: attrs["tvg-id"] ?: "Canal sin nombre"
+                        }.trim()
+                        pending = Pending(
+                            name = name,
+                            group = (attrs["group-title"] ?: attrs["group"])?.takeIf { it.isNotBlank() },
+                            logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
+                            tvgId = attrs["tvg-id"]?.takeIf { it.isNotBlank() },
+                            tvgName = attrs["tvg-name"]?.takeIf { it.isNotBlank() }
+                        )
                     }
-                    pending = null
-                }
-            }
 
-            if (lineNumber % 1000 == 0) onProgress(channels.size)
+                    line.startsWith("#EXTGRP:") -> {
+                        val group = line.substring(8).trim()
+                        if (group.isNotEmpty()) pending = pending?.copy(group = group)
+                    }
+
+                    line.startsWith("#") -> Unit
+
+                    else -> {
+                        val entry = pending
+                        if (entry == null) {
+                            addWarning(warnings, "Línea $lineNumber: URL sin #EXTINF, ignorada.")
+                        } else {
+                            val resolved = resolveUrl(line, baseUrl)
+                            if (resolved == null) {
+                                addWarning(warnings, "Línea $lineNumber: URL no válida, ignorada.")
+                            } else {
+                                val type = classify(resolved, entry.group)
+                                val channel = Channel(
+                                    id = buildId(resolved, entry.name, index),
+                                    name = entry.name,
+                                    url = resolved,
+                                    group = entry.group,
+                                    logoUrl = entry.logo,
+                                    tvgId = entry.tvgId,
+                                    sourceType = type,
+                                    searchKey = SearchNormalizer.key(
+                                        "${entry.name} ${entry.tvgName.orEmpty()} ${entry.group.orEmpty()}"
+                                    ),
+                                    qualityTag = qualityTagOf(entry.name),
+                                    favoriteKey = buildFavoriteKey(entry.tvgId, resolved)
+                                )
+                                channels += channel
+                                counts[type] = (counts[type] ?: 0) + 1
+                                entry.group?.let { group ->
+                                    groupCounts[group] = (groupCounts[group] ?: 0) + 1
+                                    val byType = groupCountsByType.getOrPut(type) { HashMap() }
+                                    byType[group] = (byType[group] ?: 0) + 1
+                                }
+                                index++
+                            }
+                        }
+                        pending = null
+                    }
+                }
+
+                // Cadence: every 1000 lines read, blank lines included (see
+                // the empty-line branch above).
+                if (lineNumber % 1000 == 0) onProgress(channels.size)
+            }
         }
 
         onProgress(channels.size)

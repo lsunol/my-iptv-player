@@ -754,7 +754,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private fun loadFromCache(list: PlaylistConfig, url: String) {
         loadJob = viewModelScope.launch {
             _state.update { it.copy(isLoading = true, isReadingCache = true, error = null) }
-            var bytes = try {
+            var cachedFile = try {
                 cache.read(list.id)
             } catch (e: CancellationException) {
                 throw e
@@ -763,19 +763,21 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
             // A v1 cache move may not have finished in a previous run; retry it
             // lazily so the cached list is still available without the network.
-            if (bytes == null && list.id.startsWith("legacy-")) {
+            if (cachedFile == null && list.id.startsWith("legacy-")) {
                 try {
                     cache.migrateLegacy(list.id)
-                    bytes = cache.read(list.id)
+                    cachedFile = cache.read(list.id)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     // Ignore: fall through to the network fetch.
                 }
             }
-            if (bytes != null) {
+            if (cachedFile != null) {
+                // The cache is parsed straight from the file, never read into
+                // memory wholesale.
                 val playlist = try {
-                    withContext(Dispatchers.Default) { repository.parseCached(bytes, url) }
+                    withContext(Dispatchers.IO) { repository.parseCached(cachedFile, url) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -821,18 +823,23 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
             }
+            // The download streams into a staged cache file that the
+            // repository commits itself after a fully successful parse. A load
+            // cancelled by a switch or an edit deliberately does NOT commit:
+            // its unique staged temp is discarded instead, so the previous
+            // cache keeps working (the next open of this list re-downloads).
+            // A failed load discards the temp too, so a failed Actualizar
+            // keeps the working cache.
             // Plain-M3U lists keep byte-for-byte today's path; only Xtream lists
             // also fetch the player_api catalogue (degrading on failure).
+            val cacheTarget = cache.stage(list.id)
             val loaded = if (list.kind == PlaylistKind.XTREAM) {
-                repository.loadWithCatalog(list, onProgress)
+                repository.loadWithCatalog(list, onProgress, cacheTarget)
             } else {
-                repository.load(url, onProgress)
+                repository.load(url, onProgress, cacheTarget)
             }
 
-            // Persist the download even if the user already switched away, so the
-            // cache is warm when they come back (avoid re-downloading).
             val now = System.currentTimeMillis()
-            runCatching { cache.write(list.id, loaded.rawBytes) }
             // The catalogue cache is only replaced on full success, mirroring
             // the M3U cache: a failed Actualizar keeps the working catalogue.
             loaded.catalog?.let { catalog ->
