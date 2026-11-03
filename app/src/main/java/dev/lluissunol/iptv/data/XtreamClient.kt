@@ -327,7 +327,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
         val episodes = episodesBySeason.getOrPut(seasonNumber) { ArrayList(episodeArray.size) }
         val usedIds = usedEpisodeIds.getOrPut(seasonNumber) { HashSet() }
         for (element in episodeArray) {
-            decodeEpisode(element, seasonNumber, matcher, fallbackUrl, usedIds)
+            decodeEpisode(element, name, seasonNumber, matcher, fallbackUrl, usedIds)
                 ?.let { episodes += it }
         }
     }
@@ -362,6 +362,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
 
 private fun decodeEpisode(
     element: JsonElement,
+    seriesName: String,
     seasonNumber: Int,
     matcher: XtreamStreamMatcher?,
     fallbackUrl: (type: String, id: String) -> String?,
@@ -379,7 +380,7 @@ private fun decodeEpisode(
         id = uniqueEpisodeId(dto.id, usedIds),
         season = seasonNumber,
         episodeNum = dto.episodeNum.toInt(),
-        title = dto.title.trim().takeIf { it.isNotEmpty() } ?: "Episodio ${dto.episodeNum}",
+        title = cleanEpisodeTitle(dto.title, seriesName, dto.episodeNum.toInt()),
         playbackUrl = url,
         favoriteKey = matched?.favoriteKey ?: dev.lluissunol.iptv.data.model.urlFavoriteKey(url)
     )
@@ -392,6 +393,67 @@ private fun decodeEpisode(
  * duplicate-key crash; the suffixed id is never used to resolve a URL (the
  * raw id's digits already did that before this runs).
  */
+/**
+ * Separator characters a provider puts between the series name, the episode
+ * code and the episode title (`"White Rabbit Project - S01E01 - Heist!"`).
+ */
+private const val TITLE_SEPARATORS = "-–—:.|"
+
+/**
+ * The episode code inside a title: `S01E01`, `s1e1`, `1x01`, `01X01`, with the
+ * separators the provider pads it with on either side.
+ */
+private val EPISODE_CODE = Regex(
+    """(?i)\s*[-–—:.|]?\s*(?:\bS\d{1,3}\s*[-_.]?\s*E\d{1,4}\b|\b\d{1,3}\s*[xX]\s*\d{1,4}\b)\s*[-–—:.|]?\s*"""
+)
+
+private val WHITESPACE_RUN = Regex("""\s{2,}""")
+
+/**
+ * Reduces a provider title to the episode name alone.
+ *
+ * Many panels send the whole line the M3U's `tvg-name` also carries,
+ * `"<series> - S01E01 - <title>"`, which is three times the information the
+ * episode row already shows (the header carries the series, the row carries the
+ * season and the episode number) and reads badly in the player's top bar.
+ *
+ * Only a *leading* series name and the episode code are removed; a title that
+ * legitimately contains a dash or a colon keeps it. An empty result degrades to
+ * `"Episodio N"` so a row never renders blank.
+ */
+internal fun cleanEpisodeTitle(raw: String, seriesName: String?, episodeNum: Int): String {
+    val fallback = "Episodio $episodeNum"
+    // The code is first normalised to a plain separator, so every shape the
+    // panels use — `"<series> - S01E01 - X"`, `"<series> 1x01 - X"`,
+    // `"S01E01 - X"` — collapses to `"<series> - X"` before the single rule
+    // below runs. Replacing with a space instead would glue the series name to
+    // the episode title and defeat the prefix test.
+    var title = EPISODE_CODE.replace(raw.trim(), " - ").trimSeparators()
+    if (title.isEmpty()) return fallback
+
+    // The separator is required after the name, so a title that merely starts
+    // with the same letters ("White Rabbit Project" vs "...Projection") is left
+    // alone. A title that is nothing but the series name is not an episode
+    // name either, so it falls through to the fallback.
+    val name = seriesName?.trim().orEmpty()
+    if (name.isNotEmpty() && title.length >= name.length &&
+        title.regionMatches(0, name, 0, name.length, ignoreCase = true)
+    ) {
+        val rest = title.substring(name.length).trimStart()
+        title = when {
+            rest.isEmpty() -> ""
+            rest[0] in TITLE_SEPARATORS -> rest.trimSeparators()
+            else -> title
+        }
+    }
+
+    title = WHITESPACE_RUN.replace(title, " ").trimSeparators()
+    return title.ifEmpty { fallback }
+}
+
+/** Trims whitespace and title separators from both ends. */
+private fun String.trimSeparators(): String = trim { it.isWhitespace() || it in TITLE_SEPARATORS }
+
 private fun uniqueEpisodeId(rawId: String, used: MutableSet<String>): String {
     if (used.add(rawId)) return rawId
     var suffix = 2

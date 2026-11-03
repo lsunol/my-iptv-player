@@ -286,7 +286,10 @@ class XtreamStreamMatcherTest {
 
         assertEquals(SourceType.SERIES, channel.sourceType)
         assertEquals("$base/series/user/pass/1001.m3u8", channel.url)
-        assertEquals("S01E01 · Piloto", channel.name)
+        // The player's top bar shows the series on its own line (`group`), so the
+        // name is the episode name alone; prepending "S01E01 · " printed the
+        // same fact twice.
+        assertEquals("Piloto", channel.name)
         assertEquals("Serie Buena", channel.group)
         assertEquals(matched.favoriteKey, channel.favoriteKey)
         assertTrue(channel.searchKey.contains("serie buena"))

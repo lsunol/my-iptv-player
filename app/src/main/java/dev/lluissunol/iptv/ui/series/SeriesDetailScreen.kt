@@ -124,6 +124,11 @@ fun SeriesDetailScreen(
         ) {
             SeriesHeader(
                 series = series,
+                // The catalogued card wins when it carries a cover; the lazy
+                // `get_series_info` payload is the fallback, because some panels
+                // only fill `cover` there and the fetched value used to be
+                // discarded.
+                posterUrl = series.posterUrl?.takeIf { it.isNotBlank() } ?: info?.posterUrl,
                 episodeCount = info?.episodeCount ?: 0,
                 isFavorite = series.favoriteKey in favoriteKeys,
                 onToggleFavorite = onToggleSeriesFavorite
@@ -162,6 +167,7 @@ fun SeriesDetailScreen(
 @Composable
 private fun SeriesHeader(
     series: SeriesCard,
+    posterUrl: String?,
     episodeCount: Int,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit
@@ -172,7 +178,7 @@ private fun SeriesHeader(
             .padding(horizontal = 20.dp, vertical = 4.dp)
     ) {
         PosterThumb(
-            posterUrl = series.posterUrl,
+            posterUrl = posterUrl,
             title = series.name,
             modifier = Modifier.size(width = 92.dp, height = 138.dp)
         )

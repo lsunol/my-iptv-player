@@ -191,6 +191,10 @@ internal fun EpisodeRow(
     }
 }
 
+/**
+ * The chip left of an episode row: the episode number alone. The season is
+ * already the selected pill above the list and the row's subtitle repeats both,
+ * so `S01E05` in the chip was the third time the same fact was printed.
+ */
 private fun episodeLabel(episode: Episode): String =
-    "S${episode.season.toString().padStart(2, '0')}" +
-        "E${episode.episodeNum.toString().padStart(2, '0')}"
+    episode.episodeNum.toString().padStart(2, '0')

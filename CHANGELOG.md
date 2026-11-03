@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Episode titles are reduced to the episode name. Panels that send the whole
+  line (`"<series> - S01E01 - <title>"`, the same string the M3U's `tvg-name`
+  carries) no longer repeat the series name in every row and in the player's top
+  bar; a title that legitimately contains a dash or a colon is left alone.
+- The episode row's chip shows the episode number alone (`01`) instead of
+  `S01E05`, which printed the same fact three times: the season pill above the
+  list, the chip and the row's subtitle.
+- Series detail now falls back to the `cover` returned by the lazy
+  `get_series_info` call when the catalogued card carries none; the fetched
+  poster used to be discarded.
+
 - Large playlists no longer need to fit in memory to be loaded. The download is
   streamed straight to a file and parsed line by line from there, so peak memory
   now depends on the number of channels and not on the size of the document that

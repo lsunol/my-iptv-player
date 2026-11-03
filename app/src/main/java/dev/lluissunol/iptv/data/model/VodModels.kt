@@ -225,15 +225,13 @@ fun VodItem.toChannel(): Channel = Channel(
  * `PlayerScreen` needs no changes for series playback.
  */
 fun Episode.toChannel(seriesName: String): Channel {
-    val displayName = "S${season.toString().padStart(2, '0')}" +
-        "E${episodeNum.toString().padStart(2, '0')} · $title"
     return Channel(
         // Built from the episode's own parts instead of a pair of 32-bit
         // hashes: [id] is unique inside its season, and the season and
         // episode number keep two seasons' worth of equal ids apart, so two
         // episodes never share a Channel id (the player keys on it).
         id = "episode:$season:$episodeNum:$id",
-        name = displayName,
+        name = title,
         url = playbackUrl,
         group = seriesName,
         logoUrl = null,

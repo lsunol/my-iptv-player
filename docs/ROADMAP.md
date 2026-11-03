@@ -71,6 +71,42 @@ is done, what is deliberately postponed, and what was discarded.
 - Deduplication/quality-variant grouping of grid items is still v1.1.
 - Ratings and movie plot screens are not rendered in the grid.
 
+## Next: alphabetical fast-scroll index (requested 2026-11-03)
+
+Goal: a vertical A–Z rail on the right edge of the three big lists — Live/All
+channels, the Movies grid and the Series grid — that shows which letter you are
+in and lets you jump to another one without flinging through tens of thousands
+of rows.
+
+Blocked on a decision, because **none of the three lists is alphabetical today**.
+Channels keep the provider's M3U order (only group counts are sorted, see
+`PlaylistParser`), and the catalogue keeps the API's order. An index over an
+unsorted list cannot jump anywhere: the letters would not be monotonic.
+
+- Option A: sort the *visible* list by display name and index that. Cheapest and
+  the rail behaves as expected, but it changes the order users see today, and it
+  separates the quality variants (`FHD`/`HD`/`HEVC`) the provider keeps adjacent.
+- Option B: keep the provider order and offer an explicit "sort A–Z" toggle in
+  the header; the rail only appears (or only works) when it is on. Honest, more UI.
+- Option C: index by group on the Live tab and by name on Movies/Series.
+
+Implementation notes, once the decision is made:
+
+- Letters come from the same normalized key the search already precomputes per
+  channel (`SearchNormalizer`), so `Á`/`A` group together and no extra pass is
+  needed per row; the bucket boundaries are computed once per filtered list, off
+  the main thread.
+- A `LazyListState`/`LazyGridState` `scrollToItem` jump per letter, plus the
+  Material 3 pattern of a letter bubble while the index is dragged.
+- The rail must not become per-row state and must not be rebuilt on every
+  recomposition: one `derivedStateOf` for the current letter, like
+  `rememberPosterCellSize` in `PosterGrid`.
+- Must stay usable with the search box and the category chips: the index is
+  derived from what is *currently displayed*, so it must be recomputed on every
+  filter change and disappear when the result set is too short to need it.
+- Touch target ≥ 48 dp wide including the drag area, and it must not swallow
+  taps meant for the rows underneath.
+
 ## Next: EPG (low priority, do not disturb the current list screen)
 
 Goal: show **Now / Next** for a channel without making the main screen busy.
@@ -143,6 +179,7 @@ repo that consumes your already-signed release APK) and mention that
 
 1. Signed release + GitHub Actions (see above). Nothing is distributable until
    this exists.
-2. EPG Now/Next (when the UI can stay clean).
-3. Radio overlay Phase 1.
-4. EPG grid and radio Phase 2 only if the simpler versions are solid.
+2. Alphabetical fast-scroll index (needs the sort-order decision first).
+3. EPG Now/Next (when the UI can stay clean).
+4. Radio overlay Phase 1.
+5. EPG grid and radio Phase 2 only if the simpler versions are solid.
