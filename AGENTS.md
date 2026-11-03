@@ -461,9 +461,30 @@ Read the matching skill before touching that area. Project skills live in
   heap was ~220 MB -- that, not the byte guard, is the real ceiling for a list
   this size. Fast synthetic flings janked ~12-15% of frames (p50 8 ms, p90
   16-21 ms).
+- **2026-11-03 — streaming parse, measured on an emulator (A/B)**: a synthetic
+  32.2 MB / 165,000-entry list (`scripts/generate-large-playlist.mjs`, served
+  from the host over `10.0.2.2`) on `emulator-5554` (`sdk_gphone64_x86_64`,
+  API 36, the AVD's stock 192 MB Java heap growth limit), the same list and the
+  same procedure on both builds, `dumpsys meminfo` **Dalvik Heap** sampled
+  throughout. Opening the cached list: **168.1 MB** peak before the change,
+  **75.9 MB** after it. The old path jumped to 98.3 MB in a single step (the
+  document materialised) and settled at 74.4 MB once the parse was done, i.e.
+  ~92 MB of transient scaffolding over a 32 MB file — 32 MB of bytes plus the
+  ~64 MB `String` built from them. First network load after the change: 78.4 MB.
+  `Actualizar` with the list already loaded: **the old build crashed** with
+  `FATAL EXCEPTION: java.lang.OutOfMemoryError` at 191.8 MB (it would have
+  finished on a device whose heap limit is larger, at roughly twice the channel
+  model); the new build peaked at **147.2 MB**, finished, advanced the header
+  timestamp and rendered 165,000 channels (Live/Movies/Series 55.0k each). A
+  refresh holding two channel models at once is by design: the old list stays
+  until the new one parses, which is what makes a failed refresh harmless.
+  Deleting the test list left no `.tmp`/`.copy` staging file in `filesDir`.
+  Emulator numbers are not comparable with the Galaxy S25 numbers above; what is
+  comparable is old against new on the same device.
 - Still unverified: Android 7 devices, all three demo streams, real HTTP
-  401/403/404 handling, and scrolling a large list by hand instead of with
-  synthetic flings.
+  401/403/404 handling, scrolling a large list by hand instead of with synthetic
+  flings, and the streaming-parse heap measurement on a physical phone rather
+  than an emulator.
 - **2026-11-03 — auditoría de consumo y enrutado gratuito**: medido el coste real
   de todas las sesiones del repo (7,99 USD: 6,05 el orquestador, 1,93 los
   subagentes en 25 runs). Cinco modelos `:free` de OpenRouter resolvieron la misma

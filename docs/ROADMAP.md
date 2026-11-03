@@ -51,7 +51,12 @@ is done, what is deliberately postponed, and what was discarded.
   first 256 KB; if a malformed sequence appears later (a Latin-1 list whose
   accents live in the VOD groups), the file is re-read as ISO-8859-1 rather
   than emitting U+FFFD. The `MAX_BYTES` download ceiling stays, but only as a
-  disk/anti-endless-stream guard, not a heap guard.
+  disk/anti-endless-stream guard, not a heap guard. Measured on an emulator with
+  a 32.2 MB / 165,000-entry list: opening the cached list went from a 168.1 MB
+  peak to 75.9 MB, and an `Actualizar` with the list loaded, which crashed the
+  old build with `OutOfMemoryError` under the AVD's 192 MB heap limit, now peaks
+  at 147.2 MB and finishes. Reproduce with
+  `scripts/generate-large-playlist.mjs` (see the verification log in AGENTS.md).
 
 ### Catalogue follow-ups (not done yet)
 
