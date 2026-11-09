@@ -27,7 +27,12 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
         val channel = state.selectedChannel
         val series = state.selectedSeries
         when {
-            channel != null -> PlayerScreen(channel = channel, onBack = viewModel::closePlayer)
+            channel != null -> PlayerScreen(
+                channel = channel,
+                muted = state.playerMuted,
+                onToggleMute = viewModel::togglePlayerMuted,
+                onBack = viewModel::closePlayer
+            )
             // Series drill-down: seasons then episodes. Back returns to the
             // grid it was opened from, with its scroll position intact.
             series != null -> SeriesDetailScreen(

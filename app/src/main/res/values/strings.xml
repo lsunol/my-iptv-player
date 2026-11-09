@@ -7,6 +7,9 @@
     <string name="refresh">Actualizar</string>
     <string name="fullscreen">Pantalla completa</string>
     <string name="exit_fullscreen">Salir de pantalla completa</string>
+    <string name="mute">Silenciar</string>
+    <string name="unmute">Activar sonido</string>
+    <string name="player_muted">Sin sonido</string>
     <string name="retry">Reintentar</string>
     <string name="search_all">Buscar en todo</string>
     <string name="all_groups">Todos</string>

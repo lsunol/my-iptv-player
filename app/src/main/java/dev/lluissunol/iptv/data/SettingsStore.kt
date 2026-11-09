@@ -1,6 +1,7 @@
 package dev.lluissunol.iptv.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -33,6 +34,7 @@ class SettingsStore(private val context: Context) {
     private val activeListKey = stringPreferencesKey("active_list_id")
     private val favoriteKeysKey = stringSetPreferencesKey("favorite_keys")
     private val vodLayoutKey = stringPreferencesKey("v1_vod_layout")
+    private val playerMutedKey = booleanPreferencesKey("v1_player_muted")
 
     // v1 stored a single playlist in these keys; kept only for migration.
     private val legacyUrlKey = stringPreferencesKey("playlist_url")
@@ -58,6 +60,17 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setVodLayout(layout: VodLayout) {
         context.dataStore.edit { it[vodLayoutKey] = layout.name }
+    }
+
+    /**
+     * Persisted player mute. It survives changing channel and restarting the
+     * app, so someone who watches muted to hear another app does not have to
+     * mute again on every channel. No stored value means "with sound".
+     */
+    val playerMuted: Flow<Boolean> = context.dataStore.data.map { it[playerMutedKey] ?: false }
+
+    suspend fun setPlayerMuted(muted: Boolean) {
+        context.dataStore.edit { it[playerMutedKey] = muted }
     }
 
     /**

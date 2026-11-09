@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Playback can be muted from the player, in the top bar and in fullscreen. It
+  silences only the app's own output: the phone's volume and any other app
+  playing audio are left alone, so a channel can be watched while listening to
+  something else. The state is remembered across channels and restarts, and a
+  "Sin sonido" badge keeps the silence explicit instead of looking like a
+  broken stream.
 - Episode titles are reduced to the episode name. Panels that send the whole
   line (`"<series> - S01E01 - <title>"`, the same string the M3U's `tvg-name`
   carries) no longer repeat the series name in every row and in the player's top

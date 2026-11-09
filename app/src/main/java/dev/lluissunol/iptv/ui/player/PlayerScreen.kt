@@ -7,23 +7,30 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -78,7 +85,12 @@ private fun restoreOrientation(orientation: Int): Int = when (orientation) {
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerScreen(channel: Channel, onBack: () -> Unit) {
+fun PlayerScreen(
+    channel: Channel,
+    muted: Boolean,
+    onToggleMute: () -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
@@ -95,6 +107,19 @@ fun PlayerScreen(channel: Channel, onBack: () -> Unit) {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
+            .apply {
+                // `mute()` scales this player's own output to 0. It is not
+                // `setDeviceVolume`/`setDeviceMuted`: the phone's volume and any
+                // other app playing audio are left completely alone. Applied
+                // here, before `prepare()`, so a muted channel never blips.
+                if (muted) mute()
+            }
+    }
+
+    // Covers toggles after creation; the factory above covers creation itself,
+    // which is why the player must never be rebuilt just because `muted` changed.
+    LaunchedEffect(player, muted) {
+        if (muted) player.mute() else player.unmute()
     }
 
     DisposableEffect(player) {
@@ -219,6 +244,7 @@ fun PlayerScreen(channel: Channel, onBack: () -> Unit) {
                         }
                     },
                     actions = {
+                        MuteButton(muted = muted, onToggle = onToggleMute)
                         IconButton(onClick = { isFullscreen = true }) {
                             Icon(
                                 imageVector = Icons.Default.Fullscreen,
@@ -249,19 +275,46 @@ fun PlayerScreen(channel: Channel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxSize()
             )
 
+            // Silence is deliberate, so it must never look like a broken stream:
+            // a badge stays on screen for as long as the player is muted.
+            if (muted) {
+                MutedBadge(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                )
+            }
+
             if (isFullscreen) {
-                IconButton(
-                    onClick = { isFullscreen = false },
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(12.dp)
-                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.FullscreenExit,
-                        contentDescription = stringResource(R.string.exit_fullscreen),
+                    MuteButton(
+                        muted = muted,
+                        onToggle = onToggleMute,
+                        modifier = Modifier.background(
+                            Color.Black.copy(alpha = 0.45f),
+                            CircleShape
+                        ),
                         tint = Color.White
                     )
+                    IconButton(
+                        onClick = { isFullscreen = false },
+                        modifier = Modifier.background(
+                            Color.Black.copy(alpha = 0.45f),
+                            CircleShape
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FullscreenExit,
+                            contentDescription = stringResource(R.string.exit_fullscreen),
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 
@@ -297,6 +350,50 @@ fun PlayerScreen(channel: Channel, onBack: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Mute toggle. The icon says what the player is doing, the description says what
+ * tapping it will do.
+ */
+@Composable
+private fun MuteButton(
+    muted: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = LocalContentColor.current
+) {
+    IconButton(onClick = onToggle, modifier = modifier) {
+        Icon(
+            imageVector = if (muted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+            contentDescription = stringResource(if (muted) R.string.unmute else R.string.mute),
+            tint = tint
+        )
+    }
+}
+
+/** Explains silent playback instead of leaving the user guessing. */
+@Composable
+private fun MutedBadge(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.VolumeOff,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp)
+        )
+        Text(
+            text = stringResource(R.string.player_muted),
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 

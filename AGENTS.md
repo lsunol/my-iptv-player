@@ -62,6 +62,10 @@ In scope:
   keeps its own cache. No cross-list search, aggregation or profiles.
 - Fullscreen playback (immersive, landscape) with an explicit exit button; back
   exits fullscreen before closing the player.
+- A mute toggle for playback, in the top bar and in fullscreen (approved
+  2026-11-09). It scales only the app's own output: the phone's volume, its
+  stream volumes and other apps' audio are never touched, and no volume slider
+  is offered. Muted is a persisted state, and it is shown on screen.
 - Rotation must not recreate the Activity or reconnect the player.
 - A release-signed APK published on GitHub Releases, plus a debug APK for
   development with `adb install`.
@@ -497,6 +501,25 @@ Read the matching skill before touching that area. Project skills live in
   `.pi/extensions/free-first-router.ts`, relativa al **cwd** del hijo (no a
   `.pi/`); verificada con un hijo `scout` en primer plano que despachó a
   `nemotron-3.5-lightning:free` (exit 0, coste 0). Detalle en `docs/TOKEN_AUDIT.md`.
+- **2026-11-09 — mute, measured on an emulator (API 36)**: the toggle uses
+  Media3's `Player.mute()`/`unmute()` (per-player output gain) and never
+  `setDeviceVolume`/`setDeviceMuted`/`AudioManager`. Objective proof from the
+  `dumpsys media.audio_flinger` track row of the app's own AudioTrack (uid 10216):
+  `G db = -33`, `L dB`/`R dB = 0` unmuted → `G db = -inf` with `L dB`/`R dB =
+  -inf` muted → back to `-33` on unmute, while the track stayed active and
+  `FrmRdy` kept growing, i.e. the video keeps playing and only its audio is
+  silenced. The phone's volume never moved: `settings get system volume_music`
+  returned 5 before and after, `STREAM_MUSIC` stayed `Muted: false`/`Muted
+  Internally: false`. `dumpsys audio`'s audio-focus stack was **empty** while a
+  channel played, so the app never takes focus from another app (Media3 1.11.1's
+  `ExoPlayer.Builder.handleAudioFocus` is never assigned and so defaults to false;
+  `setAudioAttributes` is never called). The `Sin sonido` badge and the
+  `VolumeOff` icon showed in portrait and in fullscreen, and entering/exiting
+  fullscreen still forced landscape and restored portrait. A player built for
+  another channel was already at `-inf` on its first dump, and the mute survived
+  a force-stop and relaunch (the new track session was created already muted).
+  Screenshots: `captures/player-muted.png`, `captures/player-fullscreen-muted.png`.
+  Not verified on a physical phone; the DataStore write-failure path is untested.
 
 ## Known traps
 

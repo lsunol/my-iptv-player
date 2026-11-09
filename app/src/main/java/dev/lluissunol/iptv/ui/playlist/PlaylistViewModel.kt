@@ -100,6 +100,11 @@ data class UiState(
     val filteredSeries: List<SeriesCard> = emptyList(),
     /** Movies/Series layout; persisted, defaults to the poster grid. */
     val vodLayout: VodLayout = VodLayout.GRID,
+    /**
+     * Player muted. App-local: it silences the player's own output only, never
+     * the phone's volume and never another app's audio. Persisted.
+     */
+    val playerMuted: Boolean = false,
     /** Selected `player_api.php` category id on the Movies/Series tabs. */
     val selectedVodCategory: String? = null,
     val query: String = "",
@@ -225,6 +230,12 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             // the grid default inside SettingsStore.
             settings.vodLayout.collect { layout ->
                 _state.update { it.copy(vodLayout = layout) }
+            }
+        }
+        viewModelScope.launch {
+            // Persisted mute; an unreadable preference degrades to "with sound".
+            settings.playerMuted.collect { muted ->
+                _state.update { it.copy(playerMuted = muted) }
             }
         }
         viewModelScope.launch { deriveFavorites() }
@@ -560,6 +571,24 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         setVodLayout(
             if (_state.value.vodLayout == VodLayout.GRID) VodLayout.LIST else VodLayout.GRID
         )
+    }
+
+    /**
+     * Silences or restores playback. Only the player's own output gain changes:
+     * the phone's volume and any other app playing audio stay as they are.
+     */
+    fun setPlayerMuted(muted: Boolean) {
+        _state.update { it.copy(playerMuted = muted) }
+        viewModelScope.launch {
+            // A failed write must not leave the UI claiming a state the app will
+            // not have after a restart, so put the toggle back where it was.
+            runCatching { settings.setPlayerMuted(muted) }
+                .onFailure { _state.update { it.copy(playerMuted = !muted) } }
+        }
+    }
+
+    fun togglePlayerMuted() {
+        setPlayerMuted(!_state.value.playerMuted)
     }
 
     /** Plays one movie of the catalogue, mapped to the player's channel shape. */
