@@ -48,9 +48,12 @@ to `google/gemini-3.1-flash-image`; other image models are in
 ## Integration (done by the Android agent, not this skill)
 
 - Legacy launcher: `mipmap-*/ic_launcher.png` + `ic_launcher_round.png`.
-- Adaptive: `mipmap-anydpi-v26/ic_launcher.xml` with a `#070B12` background and
-  the mark as foreground.
-- In-app header: `drawable-nodpi/logo_mark.png`, clipped to a rounded square.
+- Adaptive: `mipmap-anydpi-v26/ic_launcher.xml` with a `#0F1A2B` background,
+  the vector `drawable/ic_launcher_foreground.xml` and a
+  `drawable/ic_launcher_monochrome.xml` layer (themed icons, Android 13+).
+- In-app header: vector `drawable/logo_mark.xml`, clipped to a rounded square.
+- Current icon: designer-made concept B «Pantalla» (2026-11). Master SVGs and
+  Play Store PNGs live in `design/brand/`; see `design/README.md`.
 - Manifest: `android:icon="@mipmap/ic_launcher"`,
   `android:roundIcon="@mipmap/ic_launcher_round"`.
 

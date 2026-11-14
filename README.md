@@ -138,7 +138,7 @@ cable/port, unlock the phone, or use wireless debugging (`adb pair` +
 ├── docs/AGENT_SETUP.md       # why this harness, how to reproduce it
 ├── docs/FEATURE_RESEARCH.md  # EPG, radio, logos, favorites research
 ├── docs/ROADMAP.md           # done, next and discarded features
-├── design/                   # generated logo concepts and brief
+├── design/                   # app icon masters (brand/), UI specs, old logo concepts
 ├── tools/generate-logo.mjs   # OpenRouter image generator
 ├── local/                    # optional local playlists (git-ignored)
 └── samples/                  # public test streams only
