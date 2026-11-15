@@ -2,7 +2,7 @@
 name: android-emulator
 description: Android emulator testing agent for Open IPTV. Use to run the app on the emulator, perform UI interactions, validate functionality, and report results. This is the default testing environment for Open IPTV.
 tools: read, grep, find, ls, edit, write, bash
-model: openrouter/free-first
+model: anthropic/claude-haiku-5-5
 thinking: low
 advertise: true
 inheritProjectContext: true

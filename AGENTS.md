@@ -274,39 +274,60 @@ Rules:
 
 ## Model routing
 
-Project defaults live in `.pi/settings.json`. These are the roles the harness
-uses; prices change, so check OpenRouter before budgeting.
+Project defaults live in `.pi/settings.json`.
 
-| Role | Model | Thinking | AA IQ† | Code‡ | Precio (in/out) | Why |
-|---|---|---|---|---|---|---|
-| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | 23 | 63% | ~$0.90/$1.50 (caché $0.25) | orchestrator |
-| `scout` | `openrouter/free-first` | low | — | — | gratis → escala a pago | fast recon |
-| `researcher` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | web synthesis |
-| `android-architect` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | judgment, plan |
-| `android-dev` | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | Kotlin/Compose quality |
-| `iptv-engineer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | correctness-critical parsing |
-| `apk-smith` | `openrouter/free-first` | medium | — | — | gratis → escala a pago | mechanical build loop |
-| `qa-reviewer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
-| `brand-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | visual identity, image evaluation |
-| `ui-designer` | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | interaction design, states, judgment |
-| `reviewer` (builtin) | `openrouter/z-ai/glm-5.3` | high | 32 | 67% | ~$0.07/$1.40 | independent review |
-| `worker` (builtin) | `openrouter/deepseek/deepseek-v4.1-flash` | medium | 28 | 74% | ~$0.05/$0.50 | generic implementation |
-| `delegate` (builtin) | `openrouter/free-first` | medium | — | — | gratis → escala a pago | lightweight delegate |
-| `evidence-auditor` (builtin) | `openrouter/free-first` | low | — | — | gratis → escala a pago | source checking |
-| `oracle` (builtin) | `openrouter/anthropic/claude-opus-5.5` | high | 58 | 74% | ~$4/$20 | expensive, explicit use only |
+**Decisión 2026-11-15: todos los subagentes de este proyecto corren en la
+suscripción de Anthropic** (OAuth, `pi auth login anthropic`), no en OpenRouter.
+Los identificadores nativos usan guiones (`anthropic/claude-opus-5-5`), no el
+formato de OpenRouter con puntos (`openrouter/anthropic/claude-opus-5.5`).
+Verificado con llamadas mínimas a `claude-haiku-5-5`, `claude-sonnet-5-5`,
+`claude-opus-5-5` y `claude-fable-5-2`: los cuatro resuelven por la OAuth.
 
-† Artificial Analysis Intelligence Index v5.0 (0–100, general; mediana ≈ 23).
-‡ DeepSWE v1.1 (abiertos) / ChatOSS Agentic Coding Index (Opus). Orientativo.
+El coste de un subagente ya no se mide en dólares por token sino en **cuota**
+de la suscripción, así que el tiering busca gastar la ventana de uso lo más
+lento posible: Opus solo donde el juicio es la tarea, Sonnet para código y
+revisión acotada, Haiku para recon y trabajo mecánico.
 
-Precios OpenRouter USD/1M tokens. Los de la sesión principal están **medidos**
-sobre el coste real registrado el 2026-11-03: `deepseek-v4-pro` se factura a
-~$0,90/$1,50 con caché a $0,25/M (no a precio Flash: era ~100× más caro en
-entrada que `v4.1-flash`; `v4.1-flash` se ha visto a ~$0,0075/$0,67).
-Ojo: `defaultModel` (sesión principal) va SIN prefijo de proveedor
-(`deepseek/deepseek-v4-pro`); los modelos de subagentes sí llevan prefijo
-(`openrouter/z-ai/glm-5.3`).
+| Role | Model | Thinking | Why |
+|---|---|---|---|
+| Main session | `openrouter/deepseek/deepseek-v4-pro` | medium | orchestrator (sin cambios) |
+| `scout` | `anthropic/claude-haiku-5-5` | low | fast recon |
+| `researcher` | `anthropic/claude-haiku-5-5` | medium | web synthesis |
+| `android-architect` | `anthropic/claude-opus-5-5` | high | judgment, plan |
+| `android-dev` | `anthropic/claude-sonnet-5-5` | medium | Kotlin/Compose quality |
+| `iptv-engineer` | `anthropic/claude-sonnet-5-5` | high | correctness-critical parsing |
+| `apk-smith` | `anthropic/claude-haiku-5-5` | medium | mechanical build loop |
+| `qa-reviewer` | `anthropic/claude-opus-5-5` | high | independent review |
+| `brand-designer` | `anthropic/claude-opus-5-5` | high | visual identity, image evaluation |
+| `ui-designer` | `anthropic/claude-opus-5-5` | high | interaction design, states, judgment |
+| `android-emulator` | `anthropic/claude-haiku-5-5` | low | emulator run + validation |
+| `reviewer` (builtin) | `anthropic/claude-opus-5-5` | high | independent review |
+| `worker` (builtin) | `anthropic/claude-sonnet-5-5` | medium | generic implementation |
+| `delegate` (builtin) | `anthropic/claude-haiku-5-5` | medium | lightweight delegate |
+| `evidence-auditor` (builtin) | `anthropic/claude-haiku-5-5` | low | source checking |
+| `oracle` (builtin) | `anthropic/claude-opus-5-5` | high | second opinion, explicit use only |
 
-### Modelos gratuitos y failover (decisión 2026-11-03)
+Los agentes de `.pi/agents/` declaran el modelo en su frontmatter; los builtin
+se fijan en `subagents.agentOverrides` de `.pi/settings.json`. Precedencia:
+override de lanzamiento → `agentOverrides.<name>.model` → frontmatter →
+`subagents.defaultModel` → modelo de la sesión padre.
+
+Los adaptadores externos (`claude-code`, `claude-code-writer`, `codex-exec*`,
+`cursor-agent*`) **no** son hijos de Pi: su `model` es un alias de su propia CLI
+y se deja como está.
+
+La sesión principal sigue en OpenRouter (`deepseek-v4-pro`), cuyo coste sí está
+**medido** sobre el gasto real registrado el 2026-11-03: ~$0,90/$1,50 por 1M con
+caché a $0,25/M. `defaultModel` de la sesión principal va SIN prefijo de
+proveedor (`deepseek/deepseek-v4-pro`); los modelos de subagentes sí lo llevan
+(`anthropic/claude-opus-5-5`).
+
+### Modelos gratuitos y failover (decisión 2026-11-03, fuera del camino por defecto)
+
+Desde 2026-11-15 ningún subagente del proyecto usa `openrouter/free-first`: los
+roles corren en la suscripción de Anthropic. Lo de abajo sigue vigente si se
+quiere volver a un modelo gratuito con `/run <agente>[model=openrouter/free-first]`
+o reactivarlo en `.pi/settings.json`.
 
 `openrouter/free-first` es un **modelo virtual** que registra
 `.pi/extensions/free-first-router.ts`: intenta modelos `:free` de OpenRouter y,
@@ -337,8 +358,9 @@ Reglas:
 Escalation examples:
 
 ```text
-/run apk-smith[model=openrouter/anthropic/claude-sonnet-5.5:medium] "Fix the Gradle failure and install the debug APK"
-/run android-dev[model=openrouter/deepseek/deepseek-v4-pro:high] "Implement the channel list screen"
+/run apk-smith[model=anthropic/claude-opus-5-5:high] "Fix the Gradle failure and install the debug APK"
+/run android-dev[model=anthropic/claude-opus-5-5:high] "Implement the channel list screen"
+/run scout[model=openrouter/free-first:low] "Map the parser entry points"
 ```
 
 If the user has no budget concerns, switch the main session to

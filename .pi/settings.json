@@ -1,14 +1,14 @@
 {
   "defaultProvider": "openrouter",
-  "defaultModel": "deepseek/deepseek-v4.1-flash",
+  "defaultModel": "anthropic/claude-opus-5-5",
   "defaultThinkingLevel": "medium",
   "packages": [
     "npm:pi-subagents",
     "npm:pi-web-access"
   ],
   "subagents": {
-    "defaultProvider": "openrouter",
-    "defaultModel": "openrouter/deepseek/deepseek-v4.1-flash",
+    "defaultProvider": "anthropic",
+    "defaultModel": "anthropic/claude-sonnet-5-5",
     "defaultThinking": "medium",
     "maxThinking": "xhigh",
     "toolActivation": "eager",
@@ -17,40 +17,40 @@
     ],
     "agentOverrides": {
       "scout": {
-        "model": "openrouter/free-first",
+        "model": "anthropic/claude-haiku-5-5",
         "thinking": "low",
         "advertise": true
       },
       "researcher": {
-        "model": "openrouter/free-first",
+        "model": "anthropic/claude-haiku-5-5",
         "thinking": "medium",
         "advertise": true
       },
       "worker": {
-        "model": "openrouter/deepseek/deepseek-v4.1-flash",
+        "model": "anthropic/claude-sonnet-5-5",
         "thinking": "medium"
       },
       "reviewer": {
-        "model": "openrouter/z-ai/glm-5.3",
+        "model": "anthropic/claude-opus-5-5",
         "thinking": "high",
         "advertise": true
       },
       "oracle": {
-        "model": "openrouter/anthropic/claude-opus-5.5",
+        "model": "anthropic/claude-opus-5-5",
         "thinking": "high",
         "advertise": true
       },
       "delegate": {
-        "model": "openrouter/free-first",
+        "model": "anthropic/claude-haiku-5-5",
         "thinking": "medium",
         "advertise": true
       },
       "evidence-auditor": {
-        "model": "openrouter/free-first",
+        "model": "anthropic/claude-haiku-5-5",
         "thinking": "low"
       },
       "android-emulator": {
-        "model": "openrouter/free-first",
+        "model": "anthropic/claude-haiku-5-5",
         "thinking": "low",
         "advertise": true
       }

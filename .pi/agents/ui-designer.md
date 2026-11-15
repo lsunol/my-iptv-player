@@ -2,7 +2,7 @@
 name: ui-designer
 description: Interaction and interface designer for Open IPTV. Use before implementing a UI change, or to review an existing screen for Material 3 compliance, information density, touch targets, edge-to-edge insets, empty/loading/error states, and honest degradation messaging. Produces a concrete interaction spec with sizes, states and tradeoffs, and never edits app source.
 tools: read, grep, find, ls, bash, write
-model: openrouter/z-ai/glm-5.3
+model: anthropic/claude-opus-5-5
 thinking: high
 advertise: true
 inheritProjectContext: true
