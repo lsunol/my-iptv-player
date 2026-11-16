@@ -3,6 +3,9 @@ package dev.lluissunol.iptv.ui.playlist
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
+import dev.lluissunol.iptv.data.model.VodCategory
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
@@ -215,7 +219,11 @@ internal fun ResultsToolbar(
     warningCount: Int,
     onOpenFilters: () -> Unit,
     onLayoutToggle: () -> Unit,
-    actions: CatalogActions
+    actions: CatalogActions,
+    categories: List<VodCategory>,
+    onOpenCategories: () -> Unit,
+    onClearCategory: () -> Unit,
+    chipFocus: FocusRequester? = null
 ) {
     val tabIndex = state.tabIndex
     val filters = state.activeSheetFilters
@@ -228,7 +236,7 @@ internal fun ResultsToolbar(
     } else {
         stringResource(R.string.items_count, displayed)
     }
-    val text = if (sort != CatalogSort.PROVIDER) {
+    val sortedText = if (sort != CatalogSort.PROVIDER) {
         stringResource(
             R.string.items_count_sorted,
             countText,
@@ -240,21 +248,58 @@ internal fun ResultsToolbar(
     } else {
         countText
     }
+    // The number never ellipsizes: when the sort suffix does not fit in two
+    // lines it is dropped (the sort button still states the order). The flag
+    // depends on the available width and font scale, not only on the text.
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    var sortedOverflows by remember(sortedText, maxWidth, fontScale, warningCount) { mutableStateOf(false) }
+    val text = if (sortedOverflows) countText else sortedText
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 8.dp)
+            .padding(start = 16.dp, end = 8.dp)
             .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // The count is an unweighted child (capped), so it is measured first and
+        // never truncated; the category chip is what shrinks.
+        Box(Modifier.weight(1f)) {
+            if (categories.isNotEmpty()) {
+                val selectedName = state.selectedVodCategory?.let { id ->
+                    categories.firstOrNull { it.id == id }?.name
+                }
+                PickerChipWithClear(
+                    label = selectedName ?: stringResource(R.string.category_chip),
+                    selected = selectedName != null,
+                    chipDescription = stringResource(
+                        R.string.category_chip_cd,
+                        selectedName ?: stringResource(R.string.all_categories)
+                    ),
+                    clearDescription = selectedName?.let { stringResource(R.string.category_clear_cd, it) },
+                    minWidth = 64.dp,
+                    maxWidth = 160.dp,
+                    onOpen = onOpenCategories,
+                    onClear = onClearCategory,
+                    focusRequester = chipFocus
+                )
+            }
+        }
+        Spacer(Modifier.width(8.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
+            overflow = TextOverflow.Clip,
+            onTextLayout = {
+                if (it.hasVisualOverflow && text == sortedText && sort != CatalogSort.PROVIDER) {
+                    sortedOverflows = true
+                }
+            },
+            modifier = Modifier.widthIn(max = 120.dp)
         )
         if (warningCount > 0) {
             Icon(
@@ -265,7 +310,7 @@ internal fun ResultsToolbar(
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = stringResource(R.string.warning_count, warningCount),
+                text = pluralStringResource(R.plurals.warning_count, warningCount, warningCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.error
             )
@@ -328,6 +373,7 @@ internal fun ResultsToolbar(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
     }
 }
 

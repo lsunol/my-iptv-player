@@ -74,6 +74,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lluissunol.iptv.R
+import dev.lluissunol.iptv.ui.playlist.canReturnToActiveList
 import dev.lluissunol.iptv.data.model.PlaylistConfig
 import dev.lluissunol.iptv.data.model.PlaylistKind
 import dev.lluissunol.iptv.data.model.xtreamBaseUrl
@@ -92,6 +93,7 @@ import dev.lluissunol.iptv.ui.shortDate
 fun ListsScreen(
     state: UiState,
     onOpenList: (String) -> Unit,
+    onBack: () -> Unit,
     onAddList: () -> Unit,
     onEditList: (String) -> Unit,
     onDeleteList: (String) -> Unit,
@@ -123,6 +125,7 @@ fun ListsScreen(
         ListsContent(
             state = state,
             onOpenList = onOpenList,
+            onBack = onBack,
             onAddList = onAddList,
             onEditList = onEditList
         )
@@ -134,10 +137,15 @@ fun ListsScreen(
 private fun ListsContent(
     state: UiState,
     onOpenList: (String) -> Unit,
+    onBack: () -> Unit,
     onAddList: () -> Unit,
     onEditList: (String) -> Unit
 ) {
     val count = state.lists.size
+    // Back returns to the active playlist; with no active list it leaves the app.
+    // An active list with an unusable URL cannot be reopened, so Back must not loop.
+    val canReturn = canReturnToActiveList(state.activeList)
+    BackHandler(enabled = canReturn) { onBack() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -150,6 +158,16 @@ private fun ListsContent(
                     )
                 ),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                navigationIcon = {
+                    if (canReturn) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back_to_active_list)
+                            )
+                        }
+                    }
+                },
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
