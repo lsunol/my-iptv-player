@@ -1,9 +1,18 @@
 package dev.lluissunol.iptv.data.model
 
+import dev.lluissunol.iptv.data.CATALOG_SCHEMA_VERSION
+import dev.lluissunol.iptv.data.CatalogEntry
+import dev.lluissunol.iptv.data.GenreLabel
+import dev.lluissunol.iptv.data.GenreNormalizer
 import dev.lluissunol.iptv.data.SearchNormalizer
 import dev.lluissunol.iptv.data.XtreamApiCatalog
 import dev.lluissunol.iptv.data.XtreamStreamMatcher
+import dev.lluissunol.iptv.data.currentYearUtc
+import dev.lluissunol.iptv.data.firstReleaseKey
 import dev.lluissunol.iptv.data.normalizeArtworkUrl
+import dev.lluissunol.iptv.data.normalizeRating10
+import dev.lluissunol.iptv.data.parseEpochSeconds
+import dev.lluissunol.iptv.data.parseRuntimeMinutes
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -38,37 +47,49 @@ data class VodCategory(
 @Serializable
 data class VodItem(
     val streamId: Long,
-    val name: String,
+    override val name: String,
     val posterUrl: String?,
-    val categoryId: String,
-    /** 0.0 means "no rating supplied by the provider". */
-    val rating: Double,
-    val searchKey: String,
+    override val categoryId: String,
+    /** Normalised 0-10 rating; 0.0 means "no rating supplied by the provider". */
+    override val rating: Double,
+    override val searchKey: String,
     val favoriteKey: String,
     val playbackUrl: String,
     /**
      * Quality badge taken from the matched M3U channel, or detected in the API
      * name. Defaulted so catalogues cached before this field still decode.
      */
-    val qualityTag: String? = null
-)
+    val qualityTag: String? = null,
+    /** Epoch seconds the provider added the title; 0 means unknown. */
+    val added: Long = 0L,
+    /** `yyyymmdd` / `yyyy0000` release key; 0 means unknown. */
+    override val releaseKey: Int = 0,
+    /** Index into [VodCatalog.movieGenres]; -1 means no usable genre. */
+    override val genreRef: Int = -1
+) : CatalogEntry
 
 /** A series (its episodes are loaded lazily via `get_series_info`). */
 @Serializable
 data class SeriesCard(
     val seriesId: Long,
-    val name: String,
+    override val name: String,
     val posterUrl: String?,
     val plot: String?,
-    val categoryId: String,
-    /** 0.0 means "no rating supplied by the provider". */
-    val rating: Double,
-    val searchKey: String,
+    override val categoryId: String,
+    /** Normalised 0-10 rating; 0.0 means "no rating supplied by the provider". */
+    override val rating: Double,
+    override val searchKey: String,
     /** Stable key independent of the M3U: `series:<series_id>`. */
     val favoriteKey: String,
     /** Quality badge detected in the series name, if any. */
-    val qualityTag: String? = null
-)
+    val qualityTag: String? = null,
+    /** `yyyymmdd` / `yyyy0000` release key from the list; 0 means unknown. */
+    override val releaseKey: Int = 0,
+    /** Episode runtime in minutes; 0 means unknown. */
+    val runtimeMin: Int = 0,
+    /** Index into [VodCatalog.seriesGenres]; -1 means no usable genre. */
+    override val genreRef: Int = -1
+) : CatalogEntry
 
 /** One season with its already URL-resolved episodes. */
 data class Season(
@@ -90,7 +111,9 @@ data class Episode(
     val title: String,
     /** Always an M3U/HLS URL: the matched playlist entry, or the provider fallback. */
     val playbackUrl: String,
-    val favoriteKey: String
+    val favoriteKey: String,
+    /** `yyyymmdd` / `yyyy0000` from the episode's own release date; 0 unknown. */
+    val releaseKey: Int = 0
 )
 
 /** Result of the lazy `get_series_info` call, grouped into seasons. */
@@ -99,7 +122,10 @@ data class SeriesInfo(
     val name: String,
     val plot: String?,
     val posterUrl: String?,
-    val seasons: List<Season>
+    val seasons: List<Season>,
+    /** Broadcast years from the episodes' release dates; 0 means unknown. */
+    val firstYear: Int = 0,
+    val lastYear: Int = 0
 ) {
     val episodeCount: Int get() = seasons.sumOf { it.episodes.size }
 }
@@ -110,8 +136,76 @@ data class VodCatalog(
     val movies: List<VodItem>,
     val series: List<SeriesCard>,
     val movieCategories: List<VodCategory>,
-    val seriesCategories: List<VodCategory>
+    val seriesCategories: List<VodCategory>,
+    /**
+     * Shape of this cache. Defaults to 0 ON PURPOSE: the cache JSON does not
+     * encode defaults, so an old file has no such field and must decode as
+     * outdated (0), never as current. [buildVodCatalog] sets the real version.
+     */
+    val schemaVersion: Int = 0,
+    /** Distinct raw genre strings of the movies ([VodItem.genreRef] indexes it). */
+    val movieGenres: List<String> = emptyList(),
+    /** Distinct raw genre strings of the series ([SeriesCard.genreRef] indexes it). */
+    val seriesGenres: List<String> = emptyList()
 )
+
+/** Displayable metadata of one movie, from the lazy `get_vod_info` call. */
+data class MovieInfo(
+    /** 0 means unknown. */
+    val year: Int,
+    /** 0 means unknown. */
+    val durationSec: Int,
+    /** 0-10; 0.0 means unknown. */
+    val rating10: Double,
+    val genres: List<GenreLabel>,
+    val director: String?,
+    /** At most 8 names. */
+    val cast: List<String>,
+    val plot: String?,
+    val posterUrl: String?
+) {
+    val isEmpty: Boolean
+        get() = year == 0 && durationSec == 0 && rating10 <= 0.0 && genres.isEmpty() &&
+            director == null && cast.isEmpty() && plot == null
+}
+
+private const val MAX_GENRE_ENTRIES = 20_000
+private const val MAX_GENRE_CHARS = 200
+private val GENRE_SPACES = Regex("""\s+""")
+
+/**
+ * Assigns each distinct *set of genres* a table index. Entries are keyed by the
+ * sorted canonical keys of their labels, so `"Drama, Crime"`, `"Crime /  Drama"`
+ * and `"crimen; drama"` share one entry instead of three (TMDB-style panels send
+ * thousands of orderings). A string that yields no usable label (junk, digits,
+ * too long) degrades to -1 (unknown); the table is a safety cap only.
+ */
+private class GenreTable {
+    private val byRaw = HashMap<String, Int>()
+    private val bySignature = HashMap<String, Int>()
+    val entries = ArrayList<String>()
+
+    fun refOf(raw: String?): Int {
+        val clean = raw?.trim()?.replace(GENRE_SPACES, " ")?.takeIf { it.isNotEmpty() } ?: return -1
+        if (clean.length > MAX_GENRE_CHARS) return -1
+        byRaw[clean]?.let { return it }
+        val labels = GenreNormalizer.labels(clean)
+        if (labels.isEmpty()) return -1
+        val signature = labels.map {
+            when (it) {
+                is GenreLabel.Known -> "c:" + it.genre.name
+                is GenreLabel.Other -> "o:" + GenreNormalizer.foldKey(it.label)
+            }
+        }.sorted().joinToString("|")
+        val ref = bySignature[signature] ?: run {
+            if (entries.size >= MAX_GENRE_ENTRIES) return -1
+            entries += clean
+            (entries.size - 1).also { bySignature[signature] = it }
+        }
+        byRaw[clean] = ref
+        return ref
+    }
+}
 
 /**
  * Merges the decoded API metadata with the M3U-derived stream URLs.
@@ -132,8 +226,13 @@ fun buildVodCatalog(
     api: XtreamApiCatalog,
     matcher: XtreamStreamMatcher,
     fallbackUrl: (type: String, id: String) -> String?,
-    serverBase: String? = null
+    serverBase: String? = null,
+    nowEpochSec: Long = System.currentTimeMillis() / 1000,
+    currentYear: Int = currentYearUtc(nowEpochSec)
 ): VodCatalog {
+    val movieGenres = GenreTable()
+    val seriesGenres = GenreTable()
+    val dayFirst = dev.lluissunol.iptv.data.detectDayFirst(api.vodStreams.asSequence().map { it.added })
     val movies = ArrayList<VodItem>(api.vodStreams.size)
     // The poster grid uses `movie:<id>` as its LazyGrid key, so the ids must be
     // unique: a provider that repeats a stream_id would otherwise crash the
@@ -151,11 +250,14 @@ fun buildVodCatalog(
             name = name,
             posterUrl = normalizeArtworkUrl(dto.streamIcon, serverBase),
             categoryId = dto.categoryId,
-            rating = dto.rating.takeIf { it > 0.0 } ?: 0.0,
+            rating = normalizeRating10(dto.rating, dto.rating5Based),
             searchKey = SearchNormalizer.key(name),
             favoriteKey = matched?.favoriteKey ?: urlFavoriteKey(url),
             playbackUrl = url,
-            qualityTag = matched?.qualityTag ?: qualityTagOf(name)
+            qualityTag = matched?.qualityTag ?: qualityTagOf(name),
+            added = parseEpochSeconds(dto.added, nowEpochSec, dayFirst),
+            releaseKey = firstReleaseKey(dto.releaseRaws(), currentYear),
+            genreRef = movieGenres.refOf(dto.genre)
         )
     }
 
@@ -171,10 +273,13 @@ fun buildVodCatalog(
             posterUrl = normalizeArtworkUrl(dto.cover, serverBase),
             plot = dto.plot?.trim()?.takeIf { it.isNotEmpty() },
             categoryId = dto.categoryId,
-            rating = dto.rating.takeIf { it > 0.0 } ?: 0.0,
+            rating = normalizeRating10(dto.rating, dto.rating5Based),
             searchKey = SearchNormalizer.key(name),
             favoriteKey = seriesFavoriteKey(dto.seriesId),
-            qualityTag = qualityTagOf(name)
+            qualityTag = qualityTagOf(name),
+            releaseKey = firstReleaseKey(dto.releaseRaws(), currentYear),
+            runtimeMin = parseRuntimeMinutes(dto.episodeRunTime),
+            genreRef = seriesGenres.refOf(dto.genre)
         )
     }
 
@@ -182,7 +287,10 @@ fun buildVodCatalog(
         movies = movies,
         series = series,
         movieCategories = categories(api.vodCategories),
-        seriesCategories = categories(api.seriesCategories)
+        seriesCategories = categories(api.seriesCategories),
+        schemaVersion = CATALOG_SCHEMA_VERSION,
+        movieGenres = movieGenres.entries,
+        seriesGenres = seriesGenres.entries
     )
 }
 
@@ -259,3 +367,15 @@ fun encodeVodCatalog(catalog: VodCatalog): String =
  */
 fun decodeVodCatalog(json: String): VodCatalog? =
     runCatching { catalogJson.decodeFromString(VodCatalog.serializer(), json) }.getOrNull()
+        ?.let { catalog ->
+            if (catalog.schemaVersion >= CATALOG_SCHEMA_VERSION) {
+                catalog
+            } else {
+                // An old cache kept raw ratings (a percentage reads "★ 85" and passes
+                // "Nota ≥ 7"); clamp them to 0-10 until a refresh rebuilds it.
+                catalog.copy(
+                    movies = catalog.movies.map { it.copy(rating = normalizeRating10(it.rating, null)) },
+                    series = catalog.series.map { it.copy(rating = normalizeRating10(it.rating, null)) }
+                )
+            }
+        }

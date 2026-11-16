@@ -1,8 +1,10 @@
 package dev.lluissunol.iptv.ui.playlist
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.imageLoader
 import coil.request.ImageRequest
+import dev.lluissunol.iptv.R
 import dev.lluissunol.iptv.data.model.SeriesCard
 import dev.lluissunol.iptv.data.model.VodItem
 
@@ -75,10 +79,14 @@ internal fun MoviePosterGrid(
     favoriteKeys: Set<String>,
     gridState: LazyGridState,
     onPlay: (VodItem) -> Unit,
+    onOpenDetails: (VodItem) -> Unit,
     onToggleFavorite: (VodItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val cellSize = rememberPosterCellSize(gridState)
+    // Resolved once for the whole grid, never per cell.
+    val playLabel = stringResource(R.string.play)
+    val detailsLabel = stringResource(R.string.movie_details)
     LazyVerticalGrid(
         columns = GridCells.Fixed(POSTER_COLUMNS),
         state = gridState,
@@ -99,7 +107,10 @@ internal fun MoviePosterGrid(
                 cellSize = cellSize,
                 isFavorite = item.favoriteKey in favoriteKeys,
                 onClick = { onPlay(item) },
-                onToggleFavorite = { onToggleFavorite(item) }
+                onToggleFavorite = { onToggleFavorite(item) },
+                onLongClick = { onOpenDetails(item) },
+                onClickLabel = playLabel,
+                onLongClickLabel = detailsLabel
             )
         }
     }
@@ -162,6 +173,7 @@ internal fun SeriesPosterGrid(
  * beyond Coil's painter, so the cell is safe to repeat tens of thousands of
  * times.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PosterCell(
     posterUrl: String?,
@@ -170,7 +182,10 @@ private fun PosterCell(
     cellSize: IntSize?,
     isFavorite: Boolean,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    onLongClickLabel: String? = null
 ) {
     val cleanTitle = cleanChannelName(title)
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -180,7 +195,18 @@ private fun PosterCell(
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(onClick = onClick)
+                .then(
+                    if (onLongClick != null) {
+                        Modifier.combinedClickable(
+                            onClick = onClick,
+                            onClickLabel = onClickLabel,
+                            onLongClick = onLongClick,
+                            onLongClickLabel = onLongClickLabel
+                        )
+                    } else {
+                        Modifier.clickable(onClick = onClick)
+                    }
+                )
         ) {
             PosterImage(
                 posterUrl = posterUrl,

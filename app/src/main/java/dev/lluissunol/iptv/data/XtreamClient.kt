@@ -2,6 +2,7 @@ package dev.lluissunol.iptv.data
 
 import dev.lluissunol.iptv.data.model.CatalogWarning
 import dev.lluissunol.iptv.data.model.Episode
+import dev.lluissunol.iptv.data.model.MovieInfo
 import dev.lluissunol.iptv.data.model.PlaylistConfig
 import dev.lluissunol.iptv.data.model.PlaylistKind
 import dev.lluissunol.iptv.data.model.SeriesInfo
@@ -23,7 +24,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -81,6 +81,16 @@ class XtreamClient(private val client: OkHttpClient) {
             }
         }
 
+    /**
+     * Lazy per-movie detail call (`get_vod_info`). It only feeds the detail
+     * screen: nothing in the answer is ever used to build a playback URL.
+     * Throws [PlaylistException] on failure.
+     */
+    suspend fun fetchVodInfo(config: PlaylistConfig, vodId: Long): VodInfoDto =
+        withContext(Dispatchers.IO) {
+            get(config, "$ACTION_VOD_INFO&vod_id=$vodId") { body -> decodeVodInfo(body) }
+        }
+
     private inline fun <T> get(
         config: PlaylistConfig,
         action: String,
@@ -125,6 +135,7 @@ class XtreamClient(private val client: OkHttpClient) {
         const val ACTION_VOD_CATEGORIES = "get_vod_categories"
         const val ACTION_SERIES_CATEGORIES = "get_series_categories"
         const val ACTION_SERIES_INFO = "get_series_info"
+        const val ACTION_VOD_INFO = "get_vod_info"
     }
 }
 
@@ -167,8 +178,30 @@ data class VodStreamDto(
     @SerialName("container_extension")
     val containerExtension: String? = null,
     @Serializable(with = FlexDoubleSerializer::class)
-    val rating: Double = 0.0
-)
+    val rating: Double = 0.0,
+    @SerialName("rating_5based")
+    @Serializable(with = FlexTextSerializer::class)
+    val rating5Based: String? = null,
+    /** Epoch seconds/ms or a date string, depending on the panel. */
+    @Serializable(with = FlexTextSerializer::class)
+    val added: String? = null,
+    // The release date has no standard name: each alias is its own property
+    // (never `@JsonNames`) and [releaseRaws] takes the first known value.
+    @Serializable(with = FlexTextSerializer::class)
+    val releasedate: String? = null,
+    @SerialName("release_date")
+    @Serializable(with = FlexTextSerializer::class)
+    val releaseDateSnake: String? = null,
+    @SerialName("releaseDate")
+    @Serializable(with = FlexTextSerializer::class)
+    val releaseDateCamel: String? = null,
+    @Serializable(with = FlexTextSerializer::class)
+    val year: String? = null,
+    @Serializable(with = FlexTextSerializer::class)
+    val genre: String? = null
+) {
+    fun releaseRaws(): List<String?> = listOf(releasedate, releaseDateSnake, releaseDateCamel, year)
+}
 
 @Serializable
 data class SeriesDto(
@@ -185,8 +218,28 @@ data class SeriesDto(
     @Serializable(with = FlexStringSerializer::class)
     val categoryId: String = "",
     @Serializable(with = FlexDoubleSerializer::class)
-    val rating: Double = 0.0
-)
+    val rating: Double = 0.0,
+    @SerialName("rating_5based")
+    @Serializable(with = FlexTextSerializer::class)
+    val rating5Based: String? = null,
+    @SerialName("releaseDate")
+    @Serializable(with = FlexTextSerializer::class)
+    val releaseDateCamel: String? = null,
+    @SerialName("release_date")
+    @Serializable(with = FlexTextSerializer::class)
+    val releaseDateSnake: String? = null,
+    @Serializable(with = FlexTextSerializer::class)
+    val releasedate: String? = null,
+    @Serializable(with = FlexTextSerializer::class)
+    val year: String? = null,
+    @Serializable(with = FlexTextSerializer::class)
+    val genre: String? = null,
+    @SerialName("episode_run_time")
+    @Serializable(with = FlexTextSerializer::class)
+    val episodeRunTime: String? = null
+) {
+    fun releaseRaws(): List<String?> = listOf(releaseDateCamel, releaseDateSnake, releasedate, year)
+}
 
 @Serializable
 data class EpisodeDto(
@@ -199,7 +252,18 @@ data class EpisodeDto(
     val title: String = "",
     /** Optional on purpose: some providers omit it, and we never use it. */
     @SerialName("container_extension")
-    val containerExtension: String? = null
+    val containerExtension: String? = null,
+    /** Raw `info` payload (object or JSON string); only its release date is read. */
+    val info: JsonElement? = null
+)
+
+/**
+ * `get_vod_info` root. `movie_data` is deliberately NOT declared: it carries
+ * the provider's own stream name/extension, which must never reach playback.
+ */
+@Serializable
+data class VodInfoDto(
+    val info: JsonElement? = null
 )
 
 /**
@@ -285,6 +349,56 @@ internal fun decodeSeriesInfo(body: String): SeriesInfoDto {
         .getOrElse { throw PlaylistException.Malformed(it) }
 }
 
+/** Decodes `get_vod_info`; a root that is neither an object, `[]` nor `null` is [PlaylistException.Malformed]. */
+internal fun decodeVodInfo(body: String): VodInfoDto {
+    val root = runCatching { xtreamJson.parseToJsonElement(body.trim()) }
+        .getOrElse { throw PlaylistException.Malformed(it) }
+    // `[]` and `null` are what some forks answer for a deleted id: the "empty" state.
+    if (root is JsonArray || root is JsonNull) return VodInfoDto(null)
+    val obj = root as? JsonObject ?: throw PlaylistException.Malformed(null)
+    return runCatching { xtreamJson.decodeFromJsonElement(VodInfoDto.serializer(), obj) }
+        .getOrElse { throw PlaylistException.Malformed(it) }
+}
+
+/**
+ * The displayable metadata of a movie. `info` may be an object, `[]`, a JSON
+ * string, `null` or `{}` depending on the panel fork; every field accepts the
+ * aliases the forks use and a bad value is simply unknown.
+ */
+internal fun VodInfoDto.toMovieInfo(
+    serverBase: String? = null,
+    currentYear: Int = currentYearUtc()
+): MovieInfo {
+    val obj = infoObjectOf(info)
+    return MovieInfo(
+        year = releaseYear(
+            firstReleaseKey(
+                listOf("releasedate", "release_date", "releaseDate", "year").map { obj?.text(it) },
+                currentYear
+            )
+        ),
+        durationSec = parseDurationSeconds(obj?.text("duration_secs"), obj?.text("duration")),
+        rating10 = normalizeRating10(parseRatingText(obj?.text("rating")), obj?.text("rating_5based")),
+        genres = GenreNormalizer.labels(obj?.text("genre")),
+        director = obj?.text("director")?.cleanLine()?.takeIf { it.isNotEmpty() },
+        cast = (obj?.text("cast") ?: obj?.text("actors"))
+            ?.split(',', '/', '|')
+            ?.map { it.cleanLine() }
+            ?.filter { it.isNotEmpty() }
+            ?.distinct()
+            ?.take(MAX_CAST)
+            .orEmpty(),
+        plot = (obj?.text("plot") ?: obj?.text("description"))?.trim()?.takeIf { it.isNotEmpty() },
+        posterUrl = normalizeArtworkUrl(obj?.text("movie_image") ?: obj?.text("cover_big"), serverBase)
+    )
+}
+
+private const val MAX_CAST = 8
+
+private val INNER_WHITESPACE = Regex("""\s+""")
+
+private fun String.cleanLine(): String = trim().replace(INNER_WHITESPACE, " ")
+
 /**
  * Builds the lean [SeriesInfo] from a decoded [SeriesInfoDto]:
  * - groups episodes by the season keys of the `episodes` object;
@@ -308,7 +422,8 @@ internal fun SeriesInfoDto.toSeriesInfo(
     defaultName: String,
     matcher: XtreamStreamMatcher?,
     fallbackUrl: (type: String, id: String) -> String?,
-    serverBase: String? = null
+    serverBase: String? = null,
+    currentYear: Int = currentYearUtc()
 ): SeriesInfo {
     val info = infoObject()
     val name = info?.text("name")?.takeIf { it.isNotBlank() }
@@ -328,7 +443,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
         val episodes = episodesBySeason.getOrPut(seasonNumber) { ArrayList(episodeArray.size) }
         val usedIds = usedEpisodeIds.getOrPut(seasonNumber) { HashSet() }
         for (element in episodeArray) {
-            decodeEpisode(element, name, seasonNumber, matcher, fallbackUrl, usedIds)
+            decodeEpisode(element, name, seasonNumber, matcher, fallbackUrl, usedIds, currentYear)
                 ?.let { episodes += it }
         }
     }
@@ -344,7 +459,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
         (this.seasons as? JsonArray)?.forEach { element ->
             val number = (element as? JsonObject)
                 ?.get("season")
-                ?.let { season -> runCatching { season.jsonPrimitive.longOrNull }.getOrNull() }
+                ?.let { season -> (season as? JsonPrimitive)?.longOrNull }
                 ?.toInt()
             if (number != null && seenNumbers.add(number)) {
                 seasons += Season(number, emptyList())
@@ -352,12 +467,26 @@ internal fun SeriesInfoDto.toSeriesInfo(
         }
     }
 
+    // Broadcast years come ONLY from the episodes' own release dates. `added`
+    // and `last_modified` are bulk-import stamps on many panels, so a 1990s
+    // show would read "2023": no date at all beats a false one.
+    var firstYear = 0
+    var lastYear = 0
+    for (season in seasons) for (episode in season.episodes) {
+        val year = releaseYear(episode.releaseKey)
+        if (year == 0) continue
+        if (firstYear == 0 || year < firstYear) firstYear = year
+        if (year > lastYear) lastYear = year
+    }
+
     return SeriesInfo(
         seriesId = seriesId,
         name = name,
         plot = info?.text("plot"),
         posterUrl = normalizeArtworkUrl(info?.text("cover"), serverBase),
-        seasons = seasons.sortedBy { it.number }
+        seasons = seasons.sortedBy { it.number },
+        firstYear = firstYear,
+        lastYear = lastYear
     )
 }
 
@@ -367,7 +496,8 @@ private fun decodeEpisode(
     seasonNumber: Int,
     matcher: XtreamStreamMatcher?,
     fallbackUrl: (type: String, id: String) -> String?,
-    usedIds: MutableSet<String>
+    usedIds: MutableSet<String>,
+    currentYear: Int
 ): Episode? {
     if (element !is JsonObject) return null
     val dto = runCatching {
@@ -383,7 +513,13 @@ private fun decodeEpisode(
         episodeNum = dto.episodeNum.toInt(),
         title = cleanEpisodeTitle(dto.title, seriesName, dto.episodeNum.toInt()),
         playbackUrl = url,
-        favoriteKey = matched?.favoriteKey ?: dev.lluissunol.iptv.data.model.urlFavoriteKey(url)
+        favoriteKey = matched?.favoriteKey ?: dev.lluissunol.iptv.data.model.urlFavoriteKey(url),
+        releaseKey = firstReleaseKey(
+            infoObjectOf(dto.info)?.let { info ->
+                listOf("releaseDate", "release_date", "releasedate", "air_date").map { info.text(it) }
+            }.orEmpty(),
+            currentYear
+        )
     )
 }
 
@@ -463,8 +599,10 @@ private fun uniqueEpisodeId(rawId: String, used: MutableSet<String>): String {
 }
 
 /** The `info` payload: an object, or a JSON-encoded string (a known fork quirk). */
-private fun SeriesInfoDto.infoObject(): JsonObject? {
-    return when (val element = info) {
+private fun SeriesInfoDto.infoObject(): JsonObject? = infoObjectOf(info)
+
+private fun infoObjectOf(element: JsonElement?): JsonObject? {
+    return when (element) {
         is JsonObject -> element
         is JsonPrimitive -> {
             if (element is JsonNull) return null
@@ -475,10 +613,23 @@ private fun SeriesInfoDto.infoObject(): JsonObject? {
     }
 }
 
-private fun JsonObject.text(key: String): String? {
-    val element = this[key] ?: return null
-    if (element is JsonNull) return null
-    return (element as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+private fun JsonObject.text(key: String): String? = this[key].asFlexText()
+
+/**
+ * A JSON value read as text, tolerating every shape the forks send: a
+ * primitive gives its content, an array of primitives is joined with `/`, an
+ * object or `null` is unknown. Blank values are unknown too.
+ */
+internal fun JsonElement?.asFlexText(): String? {
+    val text = when (this) {
+        null, is JsonNull -> null
+        is JsonPrimitive -> content
+        is JsonArray -> mapNotNull { element ->
+            (element as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content
+        }.filter { it.isNotBlank() }.joinToString("/")
+        else -> null
+    }
+    return text?.takeIf { it.isNotBlank() }
 }
 
 // ------------------------------------------------- tolerant JSON primitives
@@ -495,7 +646,8 @@ object FlexLongSerializer : KSerializer<Long> {
     override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Long {
         val json = decoder as? JsonDecoder
             ?: throw SerializationException("FlexLong expects JSON input")
-        return json.decodeJsonElement().jsonPrimitive.longOrNull ?: 0L
+        val primitive = json.decodeJsonElement() as? JsonPrimitive
+        return primitive?.longOrNull ?: primitive?.doubleOrNull?.toLong() ?: 0L
     }
 
     override fun serialize(
@@ -510,7 +662,13 @@ object FlexDoubleSerializer : KSerializer<Double> {
     override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): Double {
         val json = decoder as? JsonDecoder
             ?: throw SerializationException("FlexDouble expects JSON input")
-        return json.decodeJsonElement().jsonPrimitive.doubleOrNull ?: 0.0
+        val primitive = json.decodeJsonElement() as? JsonPrimitive ?: return 0.0
+        if (primitive is JsonNull) return 0.0
+        // `"7,4"` is a real shape (decimal comma); anything else is unknown.
+        val value = primitive.doubleOrNull
+            ?: primitive.content.trim().replace(',', '.').toDoubleOrNull()
+            ?: return 0.0
+        return if (value.isFinite()) value else 0.0
     }
 
     override fun serialize(
@@ -534,4 +692,25 @@ object FlexStringSerializer : KSerializer<String> {
         encoder: kotlinx.serialization.encoding.Encoder,
         value: String
     ) = encoder.encodeString(value)
+}
+
+/**
+ * A text field of any JSON shape (see [asFlexText]). Declared nullable so an
+ * absent field and an unusable one are both "unknown".
+ */
+object FlexTextSerializer : KSerializer<String?> {
+    override val descriptor = PrimitiveSerialDescriptor("FlexText", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): String? {
+        val json = decoder as? JsonDecoder
+            ?: throw SerializationException("FlexText expects JSON input")
+        return json.decodeJsonElement().asFlexText()
+    }
+
+    override fun serialize(
+        encoder: kotlinx.serialization.encoding.Encoder,
+        value: String?
+    ) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value)
+    }
 }

@@ -21,6 +21,8 @@ URL or Xtream server, one active list at a time, per-list cache) was approved
 and merged on 2026-11-01. It is in scope, and the older "single list only" rule
 is superseded.
 
+Explicit scope decision on record: **catalogue sorting, filters and detail metadata** (approved 2026-11-15, `design/ui/catalog-sort-filter*.md`): sort and filter controls on the Movies/Series tabs that are offered only when the loaded catalogue carries the data (any Xtream panel), long-press movie detail from `get_vod_info` (display only, never used for playback) and richer series headers. Metadata-only; no third-party services.
+
 Explicit scope decision on record: **Xtream `player_api.php` catalogue for
 Movies/Series** was approved. For `PlaylistKind.XTREAM` lists the M3U download
 stays the source of playback URLs (it is requested with `output=m3u8`, so every
@@ -561,6 +563,25 @@ Read the matching skill before touching that area. Project skills live in
   falls back to the initial with "1 de 5 portadas…", and the series detail
   shows the `s:NN:` cover from `get_series_info`. 0 `FATAL EXCEPTION`.
   Screenshots: `captures/series-covers/`. Not verified on a physical phone.
+
+- **2026-11-16 — catalogue sort/filter/detail, emulator (API 36)**: built by
+  agents (ui-designer spec -> android-architect plan + critique -> android-dev
+  -> qa-reviewer + ui-designer cross-review -> fixes -> android-emulator
+  evidence -> qa-reviewer gate: PASS with warnings). 238 unit tests pass,
+  including measured / rich / bare / malformed panel fixtures and an old-cache
+  decode. On the real account: "Añadidas recientemente" top 5 equals the
+  `added`-desc order computed independently from `get_vod_streams`; series
+  genre "Comedia" shows 630, equal to an independent Comedy∪Comedia count;
+  "Estreno más reciente" is not offered (no `releaseDate` there); Breaking Bad
+  header shows "2008 – 2013". With `scripts/fake-xtream-panel.mjs`: `rich`
+  offers and sorts by release date, `bare` offers only provider order and A-Z,
+  `malformed` loads 1,398/1,400 titles and hides sorts below 50% coverage.
+  Live channels still play. **Real-account VOD playback fails at the
+  provider**: the movie URL redirects to an `.mp4` endpoint that answers an
+  HTML "Server Error" page (status 206), so Media3 reports
+  `PARSING_CONTAINER_UNSUPPORTED`; the message is now actionable. Not verified:
+  physical phone, rotation, TalkBack, 2x font, heap with 100k titles.
+  Screenshots: `captures/sort-filter/` (contain the real catalogue: keep private).
 
 ## Known traps
 

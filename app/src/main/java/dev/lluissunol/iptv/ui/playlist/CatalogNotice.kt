@@ -12,8 +12,9 @@ import dev.lluissunol.iptv.data.model.VodCatalog
  * - [INFO]: a passive notice, no action offered.
  * - [ACTION_REFRESH]: the state is degraded **and** the user has a remedy, so
  *   the notice carries an "Actualizar" button.
+ * - [ACTION_DISMISS]: a one-time tip the user acknowledges with "Entendido".
  */
-enum class CatalogNoticeKind { NONE, INFO, ACTION_REFRESH }
+enum class CatalogNoticeKind { NONE, INFO, ACTION_REFRESH, ACTION_DISMISS }
 
 /**
  * The message of a notice, as a value instead of a sentence.
@@ -49,6 +50,15 @@ sealed interface CatalogNoticeText {
 
     /** Cross-type search: the flat list is intentional, not a degradation. */
     data object SearchAll : CatalogNoticeText
+
+    /** The cached catalogue predates the sort/filter metadata; a refresh fills it. */
+    data object CatalogOutdated : CatalogNoticeText
+
+    /** A saved sort or filter is no longer available on this list and was removed. */
+    data object ControlsReset : CatalogNoticeText
+
+    /** One-time tip: long-press a movie for its details. */
+    data object MovieDetailHint : CatalogNoticeText
 }
 
 /** A notice: its kind and, when there is one, what it says. */
@@ -83,6 +93,11 @@ data class CatalogNotice(
  *    yet (first run, an install upgraded from a version without the catalogue
  *    cache, or a corrupt cache file). Same remedy as 5 — unless a refresh is
  *    already running, in which case the progress bar is the better answer.
+ *
+ * With a catalogue the priority is: decode warning, outdated cache (not while a
+ * refresh runs: the refresh is the remedy), controls reset, the movie-detail
+ * hint (Movies only, until it has been seen), unreachable posters. The hint is
+ * one-time and dismissible, so it can only mask the poster notice until then.
  */
 fun catalogNotice(
     kind: PlaylistKind,
@@ -91,7 +106,10 @@ fun catalogNotice(
     tab: SourceType?,
     searchAll: Boolean,
     isLoading: Boolean,
-    unreachablePosters: Int = 0
+    unreachablePosters: Int = 0,
+    catalogOutdated: Boolean = false,
+    controlsReset: Boolean = false,
+    showMovieHint: Boolean = false
 ): CatalogNotice {
     if (tab != SourceType.MOVIE && tab != SourceType.SERIES) return CatalogNotice.None
     if (searchAll) {
@@ -104,6 +122,15 @@ fun catalogNotice(
     if (kind == PlaylistKind.URL) return CatalogNotice.None
     if (catalog != null) {
         catalogWarning?.let { return CatalogNotice(CatalogNoticeKind.INFO, it.toNoticeText()) }
+        if (catalogOutdated && !isLoading) {
+            return CatalogNotice(CatalogNoticeKind.ACTION_REFRESH, CatalogNoticeText.CatalogOutdated)
+        }
+        if (controlsReset) {
+            return CatalogNotice(CatalogNoticeKind.INFO, CatalogNoticeText.ControlsReset)
+        }
+        if (showMovieHint && tab == SourceType.MOVIE) {
+            return CatalogNotice(CatalogNoticeKind.ACTION_DISMISS, CatalogNoticeText.MovieDetailHint)
+        }
         if (unreachablePosters > 0) {
             val total = if (tab == SourceType.MOVIE) catalog.movies.size else catalog.series.size
             return CatalogNotice(

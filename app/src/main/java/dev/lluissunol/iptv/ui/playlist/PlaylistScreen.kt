@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,10 +34,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
@@ -62,7 +61,11 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -81,6 +84,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import dev.lluissunol.iptv.R
 import dev.lluissunol.iptv.data.VodLayout
+import dev.lluissunol.iptv.data.cleanDisplayName
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.PlaylistKind
@@ -106,9 +110,12 @@ internal val LogoPalette = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistScreen(
+internal fun PlaylistScreen(
     state: UiState,
     vodGridState: LazyGridState,
+    vodListState: LazyListState,
+    scrollVersions: ScrollVersions,
+    actions: CatalogActions,
     onBackToLists: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
@@ -158,6 +165,9 @@ fun PlaylistScreen(
                 PlaylistContent(
                     state = state,
                     vodGridState = vodGridState,
+                    vodListState = vodListState,
+                    scrollVersions = scrollVersions,
+                    actions = actions,
                     onQueryChange = onQueryChange,
                     onTabChange = onTabChange,
                     onSearchAllChange = onSearchAllChange,
@@ -403,6 +413,9 @@ private fun ErrorCard(error: String, onRetry: () -> Unit, onDismiss: () -> Unit)
 private fun PlaylistContent(
     state: UiState,
     vodGridState: LazyGridState,
+    vodListState: LazyListState,
+    scrollVersions: ScrollVersions,
+    actions: CatalogActions,
     onQueryChange: (String) -> Unit,
     onTabChange: (SourceType?) -> Unit,
     onSearchAllChange: (Boolean) -> Unit,
@@ -417,6 +430,16 @@ private fun PlaylistContent(
     onRetry: () -> Unit
 ) {
     val playlist = state.playlist ?: return
+    // One instance of sheet chrome state; it closes itself if the tab loses its filters.
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    val canFilter = state.isCatalogTab && state.tabIndex?.let { it.size >= 2 && it.hasFilters } == true
+    // Forget a stale "open" so the sheet cannot pop up later on its own.
+    // Close the sheet when the catalogue stops supporting filters (e.g. a
+    // refresh): an effect, not a write during composition.
+    LaunchedEffect(canFilter) { if (!canFilter) showFilters = false }
+    if (showFilters) {
+        FilterSheet(state = state, onDismiss = { showFilters = false }, actions = actions)
+    }
 
     Column(Modifier.fillMaxSize()) {
         if (state.isLoading) {
@@ -436,11 +459,20 @@ private fun PlaylistContent(
         FilterRow(
             state = state,
             onGroupChange = onGroupChange,
-            onVodCategoryChange = onVodCategoryChange,
-            onVodLayoutToggle = onVodLayoutToggle
+            onVodCategoryChange = onVodCategoryChange
         )
 
-        ListHeader(state = state, playlist = playlist)
+        if (state.isCatalogTab && state.activeSheetFilters > 0) {
+            ActiveFilterChips(state = state, actions = actions)
+        }
+
+        ListHeader(
+            state = state,
+            playlist = playlist,
+            onOpenFilters = { showFilters = true },
+            onLayoutToggle = onVodLayoutToggle,
+            actions = actions
+        )
 
         state.error?.let { message ->
             ErrorBanner(message = message, onRetry = onRetry)
@@ -458,53 +490,101 @@ private fun PlaylistContent(
             tab = state.tab,
             searchAll = state.searchAll,
             isLoading = state.isLoading,
-            unreachablePosters = state.unreachablePostersInTab
+            unreachablePosters = state.unreachablePostersInTab,
+            catalogOutdated = state.catalogOutdated,
+            controlsReset = state.controlsReset,
+            showMovieHint = !state.movieHintSeen
         )
         notice.text?.let { text ->
             NoticeLine(
                 message = noticeText(text),
-                action = if (notice.kind == CatalogNoticeKind.ACTION_REFRESH) onRefresh else null,
-                actionEnabled = !state.isLoading
+                action = when (notice.kind) {
+                    CatalogNoticeKind.ACTION_REFRESH -> onRefresh
+                    CatalogNoticeKind.ACTION_DISMISS -> actions.onDismissHint
+                    else -> null
+                },
+                actionLabel = stringResource(
+                    if (notice.kind == CatalogNoticeKind.ACTION_DISMISS) R.string.got_it else R.string.refresh
+                ),
+                actionEnabled = notice.kind == CatalogNoticeKind.ACTION_DISMISS || !state.isLoading
             )
         }
 
         val posterGrid = state.isCatalogTab && state.vodLayout == VodLayout.GRID
+        // A new catalogue view (sort, language, genre, rating or category) scrolls
+        // to the top FROM COMPOSITION, in the pass that already shows the new
+        // list: a keyed lazy list keeps its first visible key in place, so a
+        // scroll issued before the list lands would end in the middle of it.
+        val view = state.catalogViewVersion
         when {
-            state.contentIsEmpty -> EmptyState(state)
-
-            posterGrid && state.tab == SourceType.MOVIE -> MoviePosterGrid(
-                items = state.filteredMovies,
-                favoriteKeys = state.favoriteKeys,
-                gridState = vodGridState,
-                onPlay = onPlayVod,
-                onToggleFavorite = { onToggleFavoriteKey(it.favoriteKey) },
-                modifier = Modifier.weight(1f)
+            state.contentIsEmpty -> EmptyState(
+                state = state,
+                onClearFilters = actions.onClearFilters,
+                onAllCategories = { onVodCategoryChange(null) },
+                onClearQuery = actions.onClearQuery
             )
 
-            posterGrid -> SeriesPosterGrid(
-                items = state.filteredSeries,
-                favoriteKeys = state.favoriteKeys,
-                gridState = vodGridState,
-                onOpen = onOpenSeries,
-                onToggleFavorite = { onToggleFavoriteKey(it.favoriteKey) },
-                modifier = Modifier.weight(1f)
-            )
+            posterGrid && state.tab == SourceType.MOVIE -> {
+                if (scrollVersions.grid != view) {
+                    scrollVersions.grid = view
+                    vodGridState.requestScrollToItem(0)
+                }
+                MoviePosterGrid(
+                    items = state.filteredMovies,
+                    favoriteKeys = state.favoriteKeys,
+                    gridState = vodGridState,
+                    onPlay = onPlayVod,
+                    onOpenDetails = actions.onOpenMovie,
+                    onToggleFavorite = { onToggleFavoriteKey(it.favoriteKey) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            state.isCatalogTab && state.tab == SourceType.MOVIE -> MovieCatalogueList(
-                items = state.filteredMovies,
-                favoriteKeys = state.favoriteKeys,
-                onPlay = onPlayVod,
-                onToggleFavorite = onToggleFavoriteKey,
-                modifier = Modifier.weight(1f)
-            )
+            posterGrid -> {
+                if (scrollVersions.grid != view) {
+                    scrollVersions.grid = view
+                    vodGridState.requestScrollToItem(0)
+                }
+                SeriesPosterGrid(
+                    items = state.filteredSeries,
+                    favoriteKeys = state.favoriteKeys,
+                    gridState = vodGridState,
+                    onOpen = onOpenSeries,
+                    onToggleFavorite = { onToggleFavoriteKey(it.favoriteKey) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
-            state.isCatalogTab -> SeriesCatalogueList(
-                items = state.filteredSeries,
-                favoriteKeys = state.favoriteKeys,
-                onOpen = onOpenSeries,
-                onToggleFavorite = onToggleFavoriteKey,
-                modifier = Modifier.weight(1f)
-            )
+            state.isCatalogTab && state.tab == SourceType.MOVIE -> {
+                if (scrollVersions.list != view) {
+                    scrollVersions.list = view
+                    vodListState.requestScrollToItem(0)
+                }
+                MovieCatalogueList(
+                    items = state.filteredMovies,
+                    favoriteKeys = state.favoriteKeys,
+                    listState = vodListState,
+                    onPlay = onPlayVod,
+                    onOpenDetails = actions.onOpenMovie,
+                    onToggleFavorite = onToggleFavoriteKey,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            state.isCatalogTab -> {
+                if (scrollVersions.list != view) {
+                    scrollVersions.list = view
+                    vodListState.requestScrollToItem(0)
+                }
+                SeriesCatalogueList(
+                    items = state.filteredSeries,
+                    favoriteKeys = state.favoriteKeys,
+                    listState = vodListState,
+                    onOpen = onOpenSeries,
+                    onToggleFavorite = onToggleFavoriteKey,
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             else -> LazyColumn(
                 modifier = Modifier
@@ -540,11 +620,16 @@ private fun PlaylistContent(
 private fun MovieCatalogueList(
     items: List<VodItem>,
     favoriteKeys: Set<String>,
+    listState: LazyListState,
     onPlay: (VodItem) -> Unit,
+    onOpenDetails: (VodItem) -> Unit,
     onToggleFavorite: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val playLabel = stringResource(R.string.play)
+    val detailsLabel = stringResource(R.string.movie_details)
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -558,7 +643,10 @@ private fun MovieCatalogueList(
                 item = item,
                 isFavorite = item.favoriteKey in favoriteKeys,
                 onPlay = onPlay,
-                onToggleFavorite = { onToggleFavorite(it.favoriteKey) }
+                onToggleFavorite = { onToggleFavorite(it.favoriteKey) },
+                onOpenDetails = onOpenDetails,
+                playLabel = playLabel,
+                detailsLabel = detailsLabel
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -569,11 +657,13 @@ private fun MovieCatalogueList(
 private fun SeriesCatalogueList(
     items: List<SeriesCard>,
     favoriteKeys: Set<String>,
+    listState: LazyListState,
     onOpen: (SeriesCard) -> Unit,
     onToggleFavorite: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -596,21 +686,18 @@ private fun SeriesCatalogueList(
 
 /**
  * Category row of the list header: provider categories on the Movies/Series
- * tabs of an Xtream list, the group pills everywhere else, plus the
- * list/grid toggle when the catalogue drives the tab.
+ * tabs of an Xtream list (narrowed by the selected language), the group pills
+ * everywhere else. The list/grid toggle lives in the results toolbar.
  */
 @Composable
 private fun FilterRow(
     state: UiState,
     onGroupChange: (String?) -> Unit,
-    onVodCategoryChange: (String?) -> Unit,
-    onVodLayoutToggle: () -> Unit
+    onVodCategoryChange: (String?) -> Unit
 ) {
-    val categories = state.vodCategories
+    val categories = state.visibleVodCategories
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(end = 8.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.weight(1f)) {
@@ -626,22 +713,6 @@ private fun FilterRow(
                 // selectable and do nothing.
                 state.isCatalogTab -> Unit
                 else -> GroupPills(state = state, onGroupChange = onGroupChange)
-            }
-        }
-        if (state.isCatalogTab) {
-            IconButton(onClick = onVodLayoutToggle) {
-                val grid = state.vodLayout == VodLayout.GRID
-                Icon(
-                    imageVector = if (grid) {
-                        Icons.AutoMirrored.Filled.ViewList
-                    } else {
-                        Icons.Default.GridView
-                    },
-                    contentDescription = stringResource(
-                        if (grid) R.string.layout_list else R.string.layout_grid
-                    ),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -694,6 +765,9 @@ private fun noticeText(text: CatalogNoticeText): String = when (text) {
     is CatalogNoticeText.PostersUnreachable ->
         stringResource(R.string.catalog_posters_unreachable, text.count, text.total)
     CatalogNoticeText.SearchAll -> stringResource(R.string.catalog_search_all)
+    CatalogNoticeText.CatalogOutdated -> stringResource(R.string.catalog_outdated)
+    CatalogNoticeText.ControlsReset -> stringResource(R.string.controls_reset)
+    CatalogNoticeText.MovieDetailHint -> stringResource(R.string.movie_detail_hint)
 }
 
 /**
@@ -709,6 +783,7 @@ private fun noticeText(text: CatalogNoticeText): String = when (text) {
 private fun NoticeLine(
     message: String,
     action: (() -> Unit)? = null,
+    actionLabel: String = stringResource(R.string.refresh),
     actionEnabled: Boolean = true
 ) {
     Row(
@@ -734,7 +809,7 @@ private fun NoticeLine(
         )
         if (action != null) {
             TextButton(onClick = action, enabled = actionEnabled) {
-                Text(stringResource(R.string.refresh))
+                Text(actionLabel)
             }
         }
     }
@@ -979,7 +1054,23 @@ internal fun GroupPill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ListHeader(state: UiState, playlist: Playlist) {
+private fun ListHeader(
+    state: UiState,
+    playlist: Playlist,
+    onOpenFilters: () -> Unit,
+    onLayoutToggle: () -> Unit,
+    actions: CatalogActions
+) {
+    if (state.isCatalogTab) {
+        ResultsToolbar(
+            state = state,
+            warningCount = playlist.warnings.size,
+            onOpenFilters = onOpenFilters,
+            onLayoutToggle = onLayoutToggle,
+            actions = actions
+        )
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1056,13 +1147,34 @@ private fun ErrorBanner(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun EmptyState(state: UiState) {
+private fun EmptyState(
+    state: UiState,
+    onClearFilters: () -> Unit,
+    onAllCategories: () -> Unit,
+    onClearQuery: () -> Unit
+) {
+    // On a catalogue tab every empty result offers the way out that peels off
+    // one layer of constraint at a time: filters, then category, then query.
+    val catalog = state.isCatalogTab
+    val hasFilters = catalog && state.activeSheetFilters > 0
+    val hasQuery = state.query.isNotBlank()
+    val hasCategory = catalog && state.selectedVodCategory != null
     val message = when {
         state.playlist == null -> stringResource(R.string.empty_playlist)
-        state.query.isNotBlank() -> stringResource(R.string.empty_search)
-        state.isCatalogTab && state.selectedVodCategory != null ->
-            stringResource(R.string.empty_category)
+        hasFilters && hasQuery -> stringResource(R.string.empty_search_filters)
+        hasFilters -> stringResource(R.string.empty_filters)
+        hasCategory -> stringResource(R.string.empty_category)
+        catalog && hasQuery -> stringResource(R.string.empty_search_titles)
+        hasQuery -> stringResource(R.string.empty_search)
+        catalog -> stringResource(R.string.empty_tab_titles)
         else -> stringResource(R.string.empty_tab)
+    }
+    val remedy: Pair<String, () -> Unit>? = when {
+        state.playlist == null -> null
+        hasFilters -> stringResource(R.string.filters_clear) to onClearFilters
+        hasCategory -> stringResource(R.string.empty_category_action) to onAllCategories
+        catalog && hasQuery -> stringResource(R.string.clear_search) to onClearQuery
+        else -> null
     }
 
     Box(
@@ -1092,6 +1204,9 @@ private fun EmptyState(state: UiState) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
+            if (remedy != null) {
+                TextButton(onClick = remedy.second) { Text(remedy.first) }
+            }
         }
     }
 }
@@ -1260,13 +1375,7 @@ private fun typeLabel(type: SourceType): String = when (type) {
     SourceType.OTHER -> stringResource(R.string.other)
 }
 
-/** Providers often prefix the name with `| Country | Category |`; strip it. */
-private val channelNamePrefix = Regex("""^\s*\|[^|]*\|\s*""")
-
-internal fun cleanChannelName(name: String): String {
-    val cleaned = name.replace(channelNamePrefix, "").trim()
-    return cleaned.ifEmpty { name.trim() }
-}
+internal fun cleanChannelName(name: String): String = cleanDisplayName(name)
 
 internal fun logoInitial(name: String): String {
     val cleaned = cleanChannelName(name)

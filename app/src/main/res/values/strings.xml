@@ -94,4 +94,128 @@
     <string name="error_list_url">La URL no es válida. Debe empezar por http:// o https:// e incluir el servidor.</string>
     <string name="error_xtream_incomplete">Completa el servidor, el usuario y la contraseña.</string>
     <string name="error_xtream_server_full_url">En Servidor escribe solo la dirección (por ejemplo http://proveedor.com:8080), sin /get.php.</string>
+
+    <!-- Catálogo: ordenar -->
+    <string name="sort_cd">Ordenar. Orden actual: %1$s</string>
+    <string name="sort_menu_title">Ordenar por</string>
+    <string name="sort_provider">Orden del proveedor</string>
+    <string name="sort_recent">Añadidas recientemente</string>
+    <string name="sort_release">Estreno más reciente</string>
+    <string name="sort_rating">Mejor valoradas</string>
+    <string name="sort_az">A-Z</string>
+    <string name="sort_az_cd">Alfabético, de la A a la Z</string>
+    <string name="sort_unavailable_hint">Solo se muestran los órdenes para los que esta lista tiene datos.</string>
+    <string name="items_count_sorted">%1$s · %2$s</string>
+    <string name="items_count_of">%1$s de %2$s títulos</string>
+
+    <!-- Catálogo: filtros -->
+    <string name="filters">Filtros</string>
+    <plurals name="filters_cd_active">
+        <item quantity="one">Filtros, %1$d activo</item>
+        <item quantity="other">Filtros, %1$d activos</item>
+    </plurals>
+    <string name="filters_title_movies">Filtrar películas</string>
+    <string name="filters_title_series">Filtrar series</string>
+    <string name="filter_language">Idioma</string>
+    <string name="filter_genre">Género</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_rating">Valoración</string>
+    <string name="filter_rating_min">Solo nota 7 o más</string>
+    <string name="filter_rating_help">Se ocultan los títulos sin nota.</string>
+    <string name="filter_rating_chip">Nota ≥ 7</string>
+    <string name="filter_genre_capped">Se muestran los %1$d géneros más frecuentes.</string>
+    <string name="filters_unavailable_hint">Solo se muestran los filtros para los que esta lista tiene datos.</string>
+    <string name="filters_clear">Quitar filtros</string>
+    <plurals name="filters_show_results">
+        <item quantity="one">Ver %1$s título</item>
+        <item quantity="other">Ver %1$s títulos</item>
+    </plurals>
+    <string name="filter_remove_cd">Quitar filtro: %1$s</string>
+    <string name="empty_filters">Ningún título cumple los filtros.</string>
+    <string name="empty_search_filters">Ningún título coincide con la búsqueda y los filtros.</string>
+    <string name="empty_search_titles">No hay títulos que coincidan con la búsqueda.</string>
+    <string name="empty_tab_titles">No hay títulos en esta pestaña.</string>
+    <string name="empty_category_action">Ver todas las categorías</string>
+    <string name="clear_search">Borrar búsqueda</string>
+    <string name="controls_reset">Algunas opciones de orden o filtro ya no están disponibles en esta lista y se han quitado.</string>
+    <string name="catalog_outdated">Este catálogo se guardó con una versión anterior de la app. Actualiza la lista para ver todas las opciones de orden y filtro.</string>
+
+    <!-- Idiomas detectados en las categorías ("Otros" reutiliza @string/other) -->
+    <string name="lang_es">Español</string>
+    <string name="lang_latino">Latino</string>
+    <string name="lang_en">Inglés</string>
+    <string name="lang_fr">Francés</string>
+    <string name="lang_de">Alemán</string>
+    <string name="lang_it">Italiano</string>
+    <string name="lang_pt">Portugués</string>
+    <string name="lang_pt_br">Portugués (Brasil)</string>
+    <string name="lang_ca">Catalán</string>
+    <string name="lang_gl">Gallego</string>
+    <string name="lang_eu">Euskera</string>
+    <string name="lang_ar">Árabe</string>
+    <string name="lang_tr">Turco</string>
+    <string name="lang_nl">Neerlandés</string>
+    <string name="lang_pl">Polaco</string>
+    <string name="lang_ru">Ruso</string>
+    <string name="lang_ro">Rumano</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="lang_vo">Versión original</string>
+
+    <!-- Géneros unificados -->
+    <string name="genre_action">Acción</string>
+    <string name="genre_adventure">Aventura</string>
+    <string name="genre_animation">Animación</string>
+    <string name="genre_comedy">Comedia</string>
+    <string name="genre_crime">Crimen</string>
+    <string name="genre_documentary">Documental</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Familia</string>
+    <string name="genre_fantasy">Fantasía</string>
+    <string name="genre_history">Historia</string>
+    <string name="genre_horror">Terror</string>
+    <string name="genre_music">Música</string>
+    <string name="genre_musical">Musical</string>
+    <string name="genre_mystery">Misterio</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_scifi">Ciencia ficción</string>
+    <string name="genre_tv_movie">Película de TV</string>
+    <string name="genre_thriller">Suspense</string>
+    <string name="genre_war">Bélica</string>
+    <string name="genre_politics">Política</string>
+    <string name="genre_western">Western</string>
+    <string name="genre_kids">Infantil</string>
+    <string name="genre_news">Noticias</string>
+    <string name="genre_reality">Reality</string>
+    <string name="genre_soap">Telenovela</string>
+    <string name="genre_talk">Entrevistas</string>
+    <string name="genre_biography">Biografía</string>
+    <string name="genre_sport">Deporte</string>
+    <string name="genre_game_show">Concurso</string>
+    <string name="genre_food">Cocina</string>
+    <string name="genre_home_garden">Hogar y jardín</string>
+    <string name="genre_mini_series">Miniserie</string>
+    <string name="genre_short">Cortometraje</string>
+    <string name="genre_travel">Viajes</string>
+
+    <!-- Ficha de película -->
+    <string name="movie_details">Ver ficha</string>
+    <string name="play">Reproducir</string>
+    <string name="movie_detail_loading">Cargando ficha…</string>
+    <string name="movie_detail_empty">El proveedor no tiene más información sobre esta película.</string>
+    <string name="movie_detail_error">No se pudo cargar la ficha.</string>
+    <string name="movie_detail_error_generic">Comprueba tu conexión e inténtalo de nuevo.</string>
+    <string name="movie_detail_error_play">Puedes reproducir la película igualmente.</string>
+    <string name="movie_detail_hint">Mantén pulsada una película para ver su ficha.</string>
+    <string name="got_it">Entendido</string>
+    <string name="movie_director">Dirección: %1$s</string>
+    <string name="movie_cast">Reparto: %1$s</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="rating_short">★ %1$s</string>
+    <string name="rating_cd">Nota %1$s de 10</string>
+
+    <!-- Cabecera de serie -->
+    <string name="series_years_range">%1$d – %2$d</string>
+    <string name="series_years_range_cd">Emitida de %1$d a %2$d</string>
+    <string name="series_runtime">%1$d min por episodio</string>
 </resources>

@@ -24,6 +24,11 @@ fun PlaybackException.userMessage(): String {
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
             "El proveedor devolvió un formato que no se puede reproducir."
+        // Seen on a real panel: the VOD redirect answers an HTML "Server
+        // Error" page (with a 2xx status), so the extractor finds no video.
+        PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+        PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
+            "El proveedor no envió vídeo: respondió con una página o un formato que no se puede reproducir. Suele ser un fallo de su servidor; prueba más tarde u otro título."
         PlaybackException.ERROR_CODE_DECODING_FAILED ->
             "El móvil no puede decodificar este canal (códec no soportado). Prueba otra variante."
         else ->

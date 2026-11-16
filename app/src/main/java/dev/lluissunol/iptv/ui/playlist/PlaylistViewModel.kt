@@ -4,18 +4,30 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.lluissunol.iptv.OpenTvApplication
+import dev.lluissunol.iptv.R
+import dev.lluissunol.iptv.data.CatalogIndex
+import dev.lluissunol.iptv.data.CatalogSort
+import dev.lluissunol.iptv.data.GenreLabel
+import dev.lluissunol.iptv.data.GenreNormalizer
+import dev.lluissunol.iptv.data.LanguageOption
 import dev.lluissunol.iptv.data.PlaylistCache
 import dev.lluissunol.iptv.data.PlaylistException
 import dev.lluissunol.iptv.data.PlaylistRepository
 import dev.lluissunol.iptv.data.SearchNormalizer
 import dev.lluissunol.iptv.data.SettingsStore
+import dev.lluissunol.iptv.data.StoredControls
+import dev.lluissunol.iptv.data.TabIndex
 import dev.lluissunol.iptv.data.VodLayout
 import dev.lluissunol.iptv.data.XtreamCache
+import dev.lluissunol.iptv.data.buildCatalogIndex
 import dev.lluissunol.iptv.data.countUnreachablePosters
+import dev.lluissunol.iptv.data.filterCatalog
+import dev.lluissunol.iptv.data.reconcileControls
 import dev.lluissunol.iptv.data.model.CatalogWarning
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Episode
 import dev.lluissunol.iptv.data.model.GroupCount
+import dev.lluissunol.iptv.data.model.MovieInfo
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.PlaylistConfig
 import dev.lluissunol.iptv.data.model.PlaylistKind
@@ -54,7 +66,9 @@ enum class Screen { LISTS, PLAYLIST }
 private data class LoadedInMemoryList(
     val playlist: Playlist,
     val catalog: VodCatalog?,
-    val catalogWarning: CatalogWarning? = null
+    val catalogWarning: CatalogWarning? = null,
+    /** Derived sort/filter data of [catalog]; built once, reused on a switch back. */
+    val catalogIndex: CatalogIndex? = null
 )
 
 /** Validation failures of the add/edit form, mapped to text in the UI. */
@@ -140,8 +154,83 @@ data class UiState(
     val selectedSeason: Int? = null,
     /** Catalogue posters (movies / series) whose image host refuses connections. */
     val unreachableMoviePosters: Int = 0,
-    val unreachableSeriesPosters: Int = 0
+    val unreachableSeriesPosters: Int = 0,
+    /** Derived capabilities of [catalog], published in the same update as it. */
+    val catalogIndex: CatalogIndex? = null,
+    val movieSort: CatalogSort = CatalogSort.PROVIDER,
+    val seriesSort: CatalogSort = CatalogSort.PROVIDER,
+    /** Saved language preference of the active list (applies where detected). */
+    val catalogLanguage: LanguageOption? = null,
+    /** Selected genre option key of the current tab (`c:ACTION`, `o:<fold>`). */
+    val genreFilter: String? = null,
+    val minRating7: Boolean = false,
+    /** A saved sort/filter was removed because the list no longer supports it. */
+    val controlsReset: Boolean = false,
+    /** True once the long-press hint was used or dismissed (true until read, no flash). */
+    val movieHintSeen: Boolean = true,
+    /**
+     * Bumped in the same state update that writes a re-sorted or re-filtered
+     * list (never for a mere query change). The grid/list scroll to the top from
+     * composition when they see a new value: scrolling before the new list lands
+     * would leave a keyed lazy list anchored in the middle of it.
+     */
+    val catalogViewVersion: Int = 0,
+    val selectedMovie: VodItem? = null,
+    val movieInfo: MovieInfo? = null,
+    val movieInfoLoading: Boolean = false,
+    /** The mapped, actionable reason the movie detail could not load. */
+    val movieInfoError: String? = null
 ) {
+    /** Index of the current Movies/Series tab, null elsewhere. */
+    val tabIndex: TabIndex?
+        get() = when (tab) {
+            SourceType.MOVIE -> catalogIndex?.movies
+            SourceType.SERIES -> catalogIndex?.series
+            else -> null
+        }
+
+    val currentSort: CatalogSort
+        get() = when (tab) {
+            SourceType.MOVIE -> movieSort
+            SourceType.SERIES -> seriesSort
+            else -> CatalogSort.PROVIDER
+        }
+
+    /** The saved language, only when this tab's catalogue actually offers it. */
+    val effectiveLanguage: LanguageOption? get() = tabIndex.validLanguage(catalogLanguage)
+    val effectiveGenre: String? get() = tabIndex.validGenre(genreFilter)
+    val effectiveMinRating: Boolean get() = minRating7 && tabIndex?.ratingFilter == true
+
+    /** Number of sheet filters (language, genre, rating) narrowing this tab. */
+    val activeSheetFilters: Int
+        get() = (if (effectiveLanguage != null) 1 else 0) +
+            (if (effectiveGenre != null) 1 else 0) +
+            (if (effectiveMinRating) 1 else 0)
+
+    val catalogOutdated: Boolean get() = catalogIndex?.outdated == true
+
+    /**
+     * The provider categories of the tab narrowed by the selected language, with
+     * the prefix stripped (`ESPAÑA - Acción` -> `Acción`) unless two chips would
+     * end up with the same label, in which case every chip keeps its full name.
+     */
+    val visibleVodCategories: List<VodCategory>
+        get() {
+            val all = vodCategories
+            val language = effectiveLanguage ?: return all
+            val facet = tabIndex?.language ?: return all
+            val inLanguage = all.filter { (facet.byCategory[it.id] ?: LanguageOption.OTHER) == language }
+            val labels = inLanguage.map { facet.strippedNames[it.id] ?: it.name }
+            if (labels.map { it.lowercase() }.toSet().size != labels.size) return inLanguage
+            return inLanguage.mapIndexed { i, category -> category.copy(name = labels[i]) }
+        }
+
+    /** Genres of the open series card, unified for display. */
+    val selectedSeriesGenres: List<GenreLabel>
+        get() = GenreNormalizer.labels(
+            selectedSeries?.genreRef?.let { catalog?.seriesGenres?.getOrNull(it) }
+        )
+
     /** Unreachable posters of the current tab, for the notice line. */
     val unreachablePostersInTab: Int
         get() = when (tab) {
@@ -197,6 +286,62 @@ data class UiState(
     }
 }
 
+internal fun TabIndex?.validLanguage(language: LanguageOption?): LanguageOption? =
+    language?.takeIf { it in this?.language?.options.orEmpty() }
+
+internal fun TabIndex?.validGenre(key: String?): String? =
+    key?.takeIf { k -> this?.genres?.options?.any { it.key == k } == true }
+
+/** Everything the catalogue/channel filter reads; compared by identity for the big parts. */
+private class FilterInput(
+    val playlist: Playlist?,
+    val catalog: VodCatalog?,
+    val index: CatalogIndex?,
+    val query: String,
+    val tab: SourceType?,
+    val group: String?,
+    val categoryId: String?,
+    val searchAll: Boolean,
+    val sort: CatalogSort,
+    val language: LanguageOption?,
+    val genre: String?,
+    val minRating7: Boolean
+) {
+    fun sameAs(other: FilterInput): Boolean =
+        playlist === other.playlist && catalog === other.catalog && index === other.index &&
+            query == other.query && tab == other.tab && group == other.group &&
+            categoryId == other.categoryId && searchAll == other.searchAll &&
+            sort == other.sort && language == other.language && genre == other.genre &&
+            minRating7 == other.minRating7
+}
+
+private fun UiState.toFilterInput() = FilterInput(
+    playlist = playlist,
+    catalog = catalog,
+    index = catalogIndex,
+    query = query,
+    tab = tab,
+    group = selectedGroup,
+    categoryId = selectedVodCategory,
+    searchAll = searchAll,
+    sort = currentSort,
+    language = effectiveLanguage,
+    genre = effectiveGenre,
+    minRating7 = effectiveMinRating
+)
+
+/** What decides whether the grid should jump back to the top (the query does not). */
+private data class ViewSignature(
+    val tab: SourceType?,
+    val sort: CatalogSort,
+    val language: LanguageOption?,
+    val genre: String?,
+    val minRating7: Boolean,
+    val category: String?
+)
+
+private fun FilterInput.signature() = ViewSignature(tab, sort, language, genre, minRating7, categoryId)
+
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as OpenTvApplication
     private val settings: SettingsStore = app.settingsStore
@@ -222,6 +367,10 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private var loadJob: Job? = null
     private var filterJob: Job? = null
     private var seriesJob: Job? = null
+    private var movieJob: Job? = null
+
+    /** Signature of the last published catalogue view; drives [UiState.catalogViewVersion]. */
+    private var lastViewSignature: ViewSignature? = null
 
     /**
      * Series detail of the current session, keyed by series id. The repository
@@ -250,6 +399,11 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             // Persisted mute; an unreadable preference degrades to "with sound".
             settings.playerMuted.collect { muted ->
                 _state.update { it.copy(playerMuted = muted) }
+            }
+        }
+        viewModelScope.launch {
+            settings.movieDetailHintSeen.collect { seen ->
+                _state.update { it.copy(movieHintSeen = seen) }
             }
         }
         viewModelScope.launch { deriveFavorites() }
@@ -318,7 +472,9 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         loadJob?.cancel()
         filterJob?.cancel()
         seriesJob?.cancel()
+        movieJob?.cancel()
         loadedSeriesInfo.clear()
+        lastViewSignature = null
         _state.update {
             it.copy(
                 screen = Screen.PLAYLIST,
@@ -326,6 +482,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 form = null,
                 playlist = null,
                 catalog = null,
+                catalogIndex = null,
+                movieSort = CatalogSort.PROVIDER,
+                seriesSort = CatalogSort.PROVIDER,
+                catalogLanguage = null,
+                genreFilter = null,
+                minRating7 = false,
+                controlsReset = false,
+                selectedMovie = null,
+                movieInfo = null,
+                movieInfoLoading = false,
+                movieInfoError = null,
                 catalogWarning = null,
                 filteredChannels = emptyList(),
                 filteredMovies = emptyList(),
@@ -364,11 +531,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     fun backToLists() {
         loadJob?.cancel()
         seriesJob?.cancel()
+        movieJob?.cancel()
         _state.update {
             it.copy(
                 screen = Screen.LISTS,
                 form = null,
                 error = null,
+                controlsReset = false,
+                selectedMovie = null,
+                movieInfo = null,
+                movieInfoLoading = false,
+                movieInfoError = null,
                 selectedSeries = null,
                 seriesInfo = null,
                 seriesLoading = false,
@@ -499,6 +672,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     runCatching { cache.delete(saved.id) }
                     runCatching { xtreamCache.delete(saved.id) }
                     repository.forget(saved.id)
+                    // The saved sort/language belong to the old catalogue; drop them silently.
+                    runCatching { settings.clearCatalogControls(saved.id) }
                     saved.copy(lastLoadedAt = null)
                 } else {
                     saved.copy(lastLoadedAt = previous.lastLoadedAt)
@@ -538,6 +713,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             val wasActive = _state.value.activeListId == listId
             if (wasActive) loadJob?.cancel()
             if (wasActive) seriesJob?.cancel()
+            if (wasActive) movieJob?.cancel()
             if (wasActive) loadedSeriesInfo.clear()
             _state.update { current ->
                 current.copy(
@@ -548,6 +724,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     playlist = if (wasActive) null else current.playlist,
                     filteredChannels = if (wasActive) emptyList() else current.filteredChannels,
                     selectedSeries = if (wasActive) null else current.selectedSeries,
+                    selectedMovie = if (wasActive) null else current.selectedMovie,
                     selectedChannel = null,
                     error = null
                 )
@@ -580,7 +757,16 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun setTab(tab: SourceType?) {
-        _state.update { it.copy(tab = tab, selectedGroup = null, selectedVodCategory = null) }
+        _state.update {
+            it.copy(
+                tab = tab,
+                selectedGroup = null,
+                selectedVodCategory = null,
+                genreFilter = null,
+                minRating7 = false,
+                controlsReset = false
+            )
+        }
         scheduleFilter(debounce = false)
     }
 
@@ -598,6 +784,153 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     fun setVodCategory(categoryId: String?) {
         _state.update { it.copy(selectedVodCategory = categoryId) }
         scheduleFilter(debounce = false)
+    }
+
+    /** Orders the current Movies/Series tab; only an available order is accepted. */
+    fun setSort(sort: CatalogSort) {
+        val current = _state.value
+        val tab = current.tab
+        if (tab != SourceType.MOVIE && tab != SourceType.SERIES) return
+        if (current.tabIndex?.sorts?.contains(sort) != true) return
+        val listId = current.activeListId ?: return
+        _state.update {
+            if (tab == SourceType.MOVIE) it.copy(movieSort = sort, controlsReset = false)
+            else it.copy(seriesSort = sort, controlsReset = false)
+        }
+        scheduleFilter(debounce = false)
+        viewModelScope.launch {
+            runCatching {
+                settings.setCatalogSort(
+                    listId, tab, sort.takeIf { it != CatalogSort.PROVIDER }?.name
+                )
+            }
+        }
+    }
+
+    /**
+     * Language filter (a per-list preference, saved). Selecting a language that
+     * does not contain the selected category resets the category in the same
+     * state update, so the two can never produce an impossible empty list.
+     */
+    fun setLanguage(language: LanguageOption?) {
+        val listId = _state.value.activeListId ?: return
+        _state.update { current ->
+            val facet = current.tabIndex?.language
+            val category = current.selectedVodCategory
+            val fits = category == null || language == null || facet == null ||
+                (facet.byCategory[category] ?: LanguageOption.OTHER) == language
+            current.copy(
+                catalogLanguage = language,
+                selectedVodCategory = if (fits) category else null,
+                controlsReset = false
+            )
+        }
+        scheduleFilter(debounce = false)
+        viewModelScope.launch { runCatching { settings.setCatalogLanguage(listId, language?.id) } }
+    }
+
+    fun setGenre(key: String?) {
+        _state.update { it.copy(genreFilter = key, controlsReset = false) }
+        scheduleFilter(debounce = false)
+    }
+
+    fun setMinRating7(enabled: Boolean) {
+        _state.update { it.copy(minRating7 = enabled, controlsReset = false) }
+        scheduleFilter(debounce = false)
+    }
+
+    /** Clears language, genre and rating (the category chip and the query stay). */
+    fun clearSheetFilters() {
+        val listId = _state.value.activeListId
+        _state.update {
+            it.copy(catalogLanguage = null, genreFilter = null, minRating7 = false, controlsReset = false)
+        }
+        scheduleFilter(debounce = false)
+        if (listId != null) {
+            viewModelScope.launch { runCatching { settings.setCatalogLanguage(listId, null) } }
+        }
+    }
+
+    fun clearQuery() {
+        _state.update { it.copy(query = "") }
+        scheduleFilter(debounce = false)
+    }
+
+    /** The user has seen the sort menu or the sheet: the reset notice has done its job. */
+    fun acknowledgeControlsReset() {
+        if (_state.value.controlsReset) _state.update { it.copy(controlsReset = false) }
+    }
+
+    fun dismissMovieHint() {
+        _state.update { it.copy(movieHintSeen = true) }
+        viewModelScope.launch { runCatching { settings.setMovieDetailHintSeen() } }
+    }
+
+    /**
+     * Opens the movie detail. The metadata (`get_vod_info`) is shown only: it
+     * never changes the playback URL, the sort order or the filters, and the
+     * Play button works from the first frame.
+     */
+    fun openMovie(item: VodItem) {
+        val list = _state.value.activeList ?: return
+        _state.update {
+            it.copy(
+                selectedMovie = item,
+                movieInfo = null,
+                movieInfoLoading = true,
+                movieInfoError = null,
+                movieHintSeen = true
+            )
+        }
+        viewModelScope.launch { runCatching { settings.setMovieDetailHintSeen() } }
+        loadMovieInfo(list, item.streamId)
+    }
+
+    fun closeMovie() {
+        movieJob?.cancel()
+        _state.update {
+            it.copy(
+                selectedMovie = null,
+                movieInfo = null,
+                movieInfoLoading = false,
+                movieInfoError = null
+            )
+        }
+    }
+
+    fun retryMovieInfo() {
+        val list = _state.value.activeList ?: return
+        val item = _state.value.selectedMovie ?: return
+        _state.update { it.copy(movieInfoLoading = true, movieInfoError = null) }
+        loadMovieInfo(list, item.streamId)
+    }
+
+    fun clearMovieError() {
+        _state.update { it.copy(movieInfoError = null) }
+    }
+
+    private fun loadMovieInfo(list: PlaylistConfig, vodId: Long) {
+        movieJob?.cancel()
+        movieJob = viewModelScope.launch {
+            val failure: String? = try {
+                val info = repository.getMovieInfo(list, vodId)
+                if (_state.value.selectedMovie?.streamId == vodId) {
+                    _state.update {
+                        it.copy(movieInfo = info, movieInfoLoading = false, movieInfoError = null)
+                    }
+                }
+                return@launch
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: PlaylistException) {
+                e.userMessage()
+            } catch (e: Exception) {
+                getApplication<Application>().getString(R.string.movie_detail_error_generic)
+            }
+            if (_state.value.selectedMovie?.streamId == vodId) {
+                _state.update { it.copy(movieInfoLoading = false, movieInfoError = failure) }
+            }
+        }
     }
 
     /** Persists the Movies/Series layout so it survives a restart. */
@@ -957,17 +1290,97 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             runCatching { repository.registerChannels(list.id, playlist.channels) }
         }
         val tab = defaultTab(playlist, _state.value.tab)
-        val result = withContext(Dispatchers.Default) {
-            filter(
-                playlist = playlist,
-                catalog = catalog,
-                query = _state.value.query,
-                tab = tab,
-                group = null,
-                categoryId = _state.value.selectedVodCategory,
-                searchAll = false
-            )
+
+        // Derived sort/filter data: built once per catalogue on Default and
+        // published in the same update as the catalogue itself.
+        val index = catalog?.let { c ->
+            loadedPlaylists[list.id]?.catalogIndex?.takeIf { it.catalog === c }
+                ?: withContext(Dispatchers.Default) { buildCatalogIndex(c) }.also { built ->
+                    loadedPlaylists[list.id]?.takeIf { it.catalog === c }?.let {
+                        loadedPlaylists[list.id] = it.copy(catalogIndex = built)
+                    }
+                }
         }
+        // Saved choices are checked only against a built, current-schema index
+        // (never at startup or against an old cache), so a valid preference can
+        // never be wiped by mistake.
+        var movieSort = CatalogSort.PROVIDER
+        var seriesSort = CatalogSort.PROVIDER
+        var language: LanguageOption? = null
+        var controlsReset = false
+        val before = _state.value
+        // A refresh of the list already on screen reconciles what is in memory:
+        // DataStore writes are asynchronous and could still hold a choice the
+        // user has just changed.
+        val refreshing = before.playlist != null && before.activeListId == list.id
+        if (index != null) {
+            val stored = runCatching {
+                if (refreshing) {
+                    StoredControls(before.movieSort.name, before.seriesSort.name, before.catalogLanguage?.id)
+                } else {
+                    StoredControls(
+                        settings.catalogSort(list.id, SourceType.MOVIE),
+                        settings.catalogSort(list.id, SourceType.SERIES),
+                        settings.catalogLanguage(list.id)
+                    )
+                }
+            }.getOrNull()
+            if (stored != null) {
+                val reconciled = reconcileControls(stored, index)
+                movieSort = reconciled.movieSort
+                seriesSort = reconciled.seriesSort
+                language = reconciled.language
+                controlsReset = reconciled.resetHappened
+                if (reconciled.writeBack) {
+                    viewModelScope.launch {
+                        runCatching {
+                            settings.setCatalogSort(list.id, SourceType.MOVIE,
+                                movieSort.takeIf { it != CatalogSort.PROVIDER }?.name)
+                            settings.setCatalogSort(list.id, SourceType.SERIES,
+                                seriesSort.takeIf { it != CatalogSort.PROVIDER }?.name)
+                            settings.setCatalogLanguage(list.id, language?.id)
+                        }
+                    }
+                }
+            }
+        }
+        val tabIndex = when (tab) {
+            SourceType.MOVIE -> index?.movies
+            SourceType.SERIES -> index?.series
+            else -> null
+        }
+        val genre = tabIndex.validGenre(before.genreFilter)
+        val ratingOn = before.minRating7 && tabIndex?.ratingFilter == true
+        // A genre or rating filter this catalogue no longer supports is dropped
+        // with the same notice as a sort or language.
+        if (index != null && !index.outdated &&
+            ((before.genreFilter != null && genre == null) || (before.minRating7 && !ratingOn))
+        ) {
+            controlsReset = true
+        }
+        val input = FilterInput(
+            playlist = playlist,
+            catalog = catalog,
+            index = index,
+            query = before.query,
+            tab = tab,
+            group = null,
+            // The published state resets the category chip, so the list must too.
+            categoryId = null,
+            searchAll = false,
+            sort = when (tab) {
+                SourceType.MOVIE -> movieSort
+                SourceType.SERIES -> seriesSort
+                else -> CatalogSort.PROVIDER
+            },
+            language = tabIndex.validLanguage(language),
+            genre = genre,
+            minRating7 = ratingOn
+        )
+        val result = withContext(Dispatchers.Default) { filter(input) }
+        val signature = input.signature()
+        val bumpView = signature != lastViewSignature
+        lastViewSignature = signature
         val lastUpdated = list.lastLoadedAt
         _state.update { current ->
             if (current.activeListId != list.id) {
@@ -979,6 +1392,12 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     },
                     playlist = playlist,
                     catalog = catalog,
+                    catalogIndex = index,
+                    movieSort = movieSort,
+                    seriesSort = seriesSort,
+                    catalogLanguage = language,
+                    controlsReset = controlsReset,
+                    catalogViewVersion = current.catalogViewVersion + if (bumpView) 1 else 0,
                     catalogWarning = catalogWarning,
                     filteredChannels = result.channels,
                     filteredMovies = result.movies,
@@ -986,11 +1405,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     tab = tab,
                     selectedGroup = null,
                     selectedVodCategory = null,
-                    selectedSeries = null,
-                    seriesInfo = null,
-                    seriesLoading = false,
-                    seriesError = null,
-                    selectedSeason = null,
+                    // A refresh finishing must not close an open detail (the player
+                    // opened from it would return to the grid instead).
+                    selectedMovie = if (refreshing) current.selectedMovie else null,
+                    movieInfo = if (refreshing) current.movieInfo else null,
+                    movieInfoLoading = if (refreshing) current.movieInfoLoading else false,
+                    movieInfoError = if (refreshing) current.movieInfoError else null,
+                    selectedSeries = if (refreshing) current.selectedSeries else null,
+                    seriesInfo = if (refreshing) current.seriesInfo else null,
+                    seriesLoading = if (refreshing) current.seriesLoading else false,
+                    seriesError = if (refreshing) current.seriesError else null,
+                    selectedSeason = if (refreshing) current.selectedSeason else null,
                     isLoading = false,
                     isReadingCache = false,
                     progressBytes = playlist.bytes,
@@ -1007,36 +1432,28 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         filterJob?.cancel()
         filterJob = viewModelScope.launch {
             if (debounce) delay(150)
-            val snapshot = _state.value
-            val result = withContext(Dispatchers.Default) {
-                filter(
-                    playlist = snapshot.playlist,
-                    catalog = snapshot.catalog,
-                    query = snapshot.query,
-                    tab = snapshot.tab,
-                    group = snapshot.selectedGroup,
-                    categoryId = snapshot.selectedVodCategory,
-                    searchAll = snapshot.searchAll
-                )
-            }
+            val input = _state.value.toFilterInput()
+            val result = withContext(Dispatchers.Default) { filter(input) }
+            val signature = input.signature()
+            val bumpView = signature != lastViewSignature
+            var applied = false
             _state.update { current ->
-                val unchanged = current.playlist === snapshot.playlist &&
-                    current.catalog === snapshot.catalog &&
-                    current.query == snapshot.query &&
-                    current.tab == snapshot.tab &&
-                    current.selectedGroup == snapshot.selectedGroup &&
-                    current.selectedVodCategory == snapshot.selectedVodCategory &&
-                    current.searchAll == snapshot.searchAll
-                if (unchanged) {
+                if (current.toFilterInput().sameAs(input)) {
+                    applied = true
                     current.copy(
                         filteredChannels = result.channels,
                         filteredMovies = result.movies,
-                        filteredSeries = result.series
+                        filteredSeries = result.series,
+                        // Same update as the new list: the view scrolls to the top
+                        // only once the re-sorted items are what it is showing.
+                        catalogViewVersion = current.catalogViewVersion + if (bumpView) 1 else 0
                     )
                 } else {
+                    applied = false
                     current
                 }
             }
+            if (applied) lastViewSignature = signature
         }
     }
 
@@ -1054,42 +1471,37 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
      * would be a second full scan of tens of thousands of entries whose result
      * nothing renders. Everything else keeps today's channel filtering.
      */
-    private fun filter(
-        playlist: Playlist?,
-        catalog: VodCatalog?,
-        query: String,
-        tab: SourceType?,
-        group: String?,
-        categoryId: String?,
-        searchAll: Boolean
-    ): FilterResult {
-        val source = playlist ?: return FilterResult(emptyList())
-        val normalized = SearchNormalizer.query(query)
+    private fun filter(input: FilterInput): FilterResult {
+        val source = input.playlist ?: return FilterResult(emptyList())
+        val normalized = SearchNormalizer.query(input.query)
+        val catalog = input.catalog
+        val tab = input.tab
 
-        if (catalog != null && !searchAll &&
+        if (catalog != null && !input.searchAll &&
             (tab == SourceType.MOVIE || tab == SourceType.SERIES)
         ) {
             val movies = if (tab == SourceType.MOVIE) {
-                catalog.movies.asSequence()
-                    .filter { categoryId == null || it.categoryId == categoryId }
-                    .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
-                    .toList()
+                filterCatalog(
+                    catalog.movies, input.index?.movies, input.sort, input.categoryId,
+                    normalized, input.language, input.genre, input.minRating7
+                )
             } else {
                 emptyList()
             }
             val series = if (tab == SourceType.SERIES) {
-                catalog.series.asSequence()
-                    .filter { categoryId == null || it.categoryId == categoryId }
-                    .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
-                    .toList()
+                filterCatalog(
+                    catalog.series, input.index?.series, input.sort, input.categoryId,
+                    normalized, input.language, input.genre, input.minRating7
+                )
             } else {
                 emptyList()
             }
             return FilterResult(emptyList(), movies, series)
         }
 
+        val group = input.group
         val channels = source.channels.asSequence()
-            .filter { searchAll || tab == null || it.sourceType == tab }
+            .filter { input.searchAll || tab == null || it.sourceType == tab }
             .filter { group == null || it.group == group }
             .filter { normalized.isEmpty() || it.searchKey.contains(normalized) }
             .toList()
@@ -1116,6 +1528,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         loadJob?.cancel()
         filterJob?.cancel()
         seriesJob?.cancel()
+        movieJob?.cancel()
         loadedPlaylists.clear()
         loadedSeriesInfo.clear()
         super.onCleared()

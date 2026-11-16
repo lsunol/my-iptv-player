@@ -8,6 +8,7 @@ import dev.lluissunol.iptv.data.model.PlaylistKind
 import dev.lluissunol.iptv.data.model.SeriesInfo
 import dev.lluissunol.iptv.data.model.SourceType
 import dev.lluissunol.iptv.data.model.VodCatalog
+import dev.lluissunol.iptv.data.model.MovieInfo
 import dev.lluissunol.iptv.data.model.buildVodCatalog
 import dev.lluissunol.iptv.data.model.buildXtreamStreamUrl
 import kotlinx.coroutines.CancellationException
@@ -136,6 +137,15 @@ class PlaylistRepository(
     private val seriesInfoCache = object : LinkedHashMap<String, SeriesInfo>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, SeriesInfo>): Boolean =
             size > MAX_CACHED_SERIES_INFO
+    }
+
+    /**
+     * Lazy per-movie detail cache (`get_vod_info`): 16 movies, memory only,
+     * never written to disk. The answer feeds the detail screen and nothing else.
+     */
+    private val movieInfoCache = object : LinkedHashMap<String, MovieInfo>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MovieInfo>): Boolean =
+            size > MAX_CACHED_MOVIE_INFO
     }
 
     /**
@@ -521,9 +531,25 @@ class PlaylistRepository(
         return info
     }
 
+    /**
+     * The displayable metadata of one movie from `get_vod_info`, fetched on
+     * first open and memoised for the session. Throws [PlaylistException].
+     */
+    suspend fun getMovieInfo(config: PlaylistConfig, vodId: Long): MovieInfo {
+        val cacheKey = "${config.id}:$vodId"
+        synchronized(movieInfoCache) { movieInfoCache[cacheKey] }?.let { return it }
+        val dto = xtreamClient.fetchVodInfo(config, vodId)
+        val info = withContext(Dispatchers.Default) {
+            dto.toMovieInfo(serverBase = config.server, currentYear = currentYearUtc())
+        }
+        synchronized(movieInfoCache) { movieInfoCache[cacheKey] = info }
+        return info
+    }
+
     /** Drops the in-memory matcher and series cache of one list (URL edit/delete). */
     fun forget(listId: String) {
         synchronized(matchers) { matchers.remove(listId) }
+        synchronized(movieInfoCache) { movieInfoCache.keys.removeIf { it.startsWith("$listId:") } }
         synchronized(seriesInfoCache) { seriesInfoCache.keys.removeIf { it.startsWith("$listId:") } }
     }
 
@@ -554,5 +580,8 @@ class PlaylistRepository(
 
         /** Series detail trees kept in memory (see [seriesInfoCache]). */
         private const val MAX_CACHED_SERIES_INFO = 32
+
+        /** Movie detail records kept in memory (see [movieInfoCache]). */
+        private const val MAX_CACHED_MOVIE_INFO = 16
     }
 }

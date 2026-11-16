@@ -40,11 +40,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lluissunol.iptv.R
+import dev.lluissunol.iptv.data.GenreLabel
+import dev.lluissunol.iptv.data.releaseYear
+import dev.lluissunol.iptv.ui.formatRating10
+import dev.lluissunol.iptv.ui.playlist.genreLabel
 import dev.lluissunol.iptv.data.model.Episode
 import dev.lluissunol.iptv.data.model.Season
 import dev.lluissunol.iptv.data.model.SeriesCard
@@ -70,6 +76,7 @@ import dev.lluissunol.iptv.ui.formatNumber
 fun SeriesDetailScreen(
     series: SeriesCard,
     info: SeriesInfo?,
+    genres: List<GenreLabel>,
     selectedSeason: Int?,
     isLoading: Boolean,
     error: String?,
@@ -130,12 +137,17 @@ fun SeriesDetailScreen(
                 // discarded.
                 posterUrl = series.posterUrl?.takeIf { it.isNotBlank() } ?: info?.posterUrl,
                 episodeCount = info?.episodeCount ?: 0,
+                genres = genres,
+                // Years come from the episodes' release dates once loaded; until
+                // then (or when none carries one) from the list's own release field.
+                firstYear = info?.firstYear?.takeIf { it > 0 } ?: releaseYear(series.releaseKey),
+                lastYear = info?.lastYear?.takeIf { it > 0 } ?: releaseYear(series.releaseKey),
                 isFavorite = series.favoriteKey in favoriteKeys,
                 onToggleFavorite = onToggleSeriesFavorite
             )
 
             error?.let { message ->
-                SeriesErrorBanner(message = message, onRetry = onRetry, onDismiss = onClearError)
+                DetailErrorBanner(message = message, onRetry = onRetry, onDismiss = onClearError)
             }
 
             when {
@@ -169,6 +181,9 @@ private fun SeriesHeader(
     series: SeriesCard,
     posterUrl: String?,
     episodeCount: Int,
+    genres: List<GenreLabel>,
+    firstYear: Int,
+    lastYear: Int,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit
 ) {
@@ -195,15 +210,64 @@ private fun SeriesHeader(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (episodeCount > 0) {
+            // Line A: broadcast years and rating. Nothing is rendered for unknowns.
+            val yearsText = when {
+                firstYear <= 0 -> null
+                lastYear > firstYear -> stringResource(R.string.series_years_range, firstYear, lastYear)
+                else -> firstYear.toString()
+            }
+            val yearsCd = if (firstYear > 0 && lastYear > firstYear) {
+                stringResource(R.string.series_years_range_cd, firstYear, lastYear)
+            } else {
+                null
+            }
+            val ratingText = series.rating.takeIf { it > 0.0 }?.let {
+                stringResource(R.string.rating_short, formatRating10(it))
+            }
+            val ratingCd = series.rating.takeIf { it > 0.0 }?.let {
+                stringResource(R.string.rating_cd, formatRating10(it))
+            }
+            val lineA = listOfNotNull(yearsText, ratingText).joinToString(" · ")
+            if (lineA.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = stringResource(
-                        R.string.series_episodes_count,
-                        formatNumber(episodeCount)
-                    ),
+                    text = lineA,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics {
+                        contentDescription = listOfNotNull(yearsCd ?: yearsText, ratingCd).joinToString(". ")
+                    }
+                )
+            }
+            // Line B: episode count (once loaded) and runtime per episode.
+            val lineB = listOfNotNull(
+                if (episodeCount > 0) {
+                    stringResource(R.string.series_episodes_count, formatNumber(episodeCount))
+                } else {
+                    null
+                },
+                series.runtimeMin.takeIf { it > 0 }?.let { stringResource(R.string.series_runtime, it) }
+            ).joinToString(" · ")
+            if (lineB.isNotEmpty()) {
+                Spacer(Modifier.height(if (lineA.isEmpty()) 4.dp else 2.dp))
+                Text(
+                    text = lineB,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // Line C: unified genres.
+            if (genres.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = genres.map { genreLabel(it) }.joinToString(", "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (plot != null) {
@@ -212,7 +276,7 @@ private fun SeriesHeader(
                     text = plot,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 5,
+                    maxLines = 4,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -362,11 +426,17 @@ private fun EmptyEpisodes() {
 
 /** Same actionable pattern as the playlist error banner, with a retry. */
 @Composable
-private fun SeriesErrorBanner(message: String, onRetry: () -> Unit, onDismiss: () -> Unit) {
+internal fun DetailErrorBanner(
+    message: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    maxLines: Int = 4,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 16.dp
+) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = horizontalPadding, vertical = 6.dp),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -376,7 +446,7 @@ private fun SeriesErrorBanner(message: String, onRetry: () -> Unit, onDismiss: (
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Normal,
-                maxLines = 4,
+                maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis
             )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

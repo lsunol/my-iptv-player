@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.lluissunol.iptv.data.model.PlaylistConfig
 import dev.lluissunol.iptv.data.model.PlaylistKind
+import dev.lluissunol.iptv.data.model.SourceType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -35,6 +36,12 @@ class SettingsStore(private val context: Context) {
     private val favoriteKeysKey = stringSetPreferencesKey("favorite_keys")
     private val vodLayoutKey = stringPreferencesKey("v1_vod_layout")
     private val playerMutedKey = booleanPreferencesKey("v1_player_muted")
+    private val movieHintSeenKey = booleanPreferencesKey("v1_movie_detail_hint_seen")
+
+    private fun sortKey(listId: String, tab: SourceType) =
+        stringPreferencesKey("v1_sort_${listId}_${tab.name}")
+
+    private fun languageKey(listId: String) = stringPreferencesKey("v1_lang_$listId")
 
     // v1 stored a single playlist in these keys; kept only for migration.
     private val legacyUrlKey = stringPreferencesKey("playlist_url")
@@ -71,6 +78,48 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setPlayerMuted(muted: Boolean) {
         context.dataStore.edit { it[playerMutedKey] = muted }
+    }
+
+    /** Saved sort of one list's Movies or Series tab (an enum name), or null. */
+    suspend fun catalogSort(listId: String, tab: SourceType): String? =
+        context.dataStore.data.first()[sortKey(listId, tab)]
+
+    suspend fun setCatalogSort(listId: String, tab: SourceType, value: String?) {
+        context.dataStore.edit { prefs ->
+            if (value == null) prefs.remove(sortKey(listId, tab)) else prefs[sortKey(listId, tab)] = value
+        }
+    }
+
+    /** Saved language filter of one list (an option id), shared by both tabs. */
+    suspend fun catalogLanguage(listId: String): String? =
+        context.dataStore.data.first()[languageKey(listId)]
+
+    suspend fun setCatalogLanguage(listId: String, value: String?) {
+        context.dataStore.edit { prefs ->
+            if (value == null) prefs.remove(languageKey(listId)) else prefs[languageKey(listId)] = value
+        }
+    }
+
+    /** Forgets a list's saved sort and language (its URL changed, or it was deleted). */
+    suspend fun clearCatalogControls(listId: String) {
+        context.dataStore.edit { prefs -> removeCatalogControls(prefs, listId) }
+    }
+
+    private fun removeCatalogControls(
+        prefs: androidx.datastore.preferences.core.MutablePreferences,
+        listId: String
+    ) {
+        prefs.remove(sortKey(listId, SourceType.MOVIE))
+        prefs.remove(sortKey(listId, SourceType.SERIES))
+        prefs.remove(languageKey(listId))
+    }
+
+    /** Whether the one-time "long-press for details" hint has been dismissed or used. */
+    val movieDetailHintSeen: Flow<Boolean> =
+        context.dataStore.data.map { it[movieHintSeenKey] ?: false }
+
+    suspend fun setMovieDetailHintSeen() {
+        context.dataStore.edit { it[movieHintSeenKey] = true }
     }
 
     /**
@@ -124,6 +173,7 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             val remaining = decodeLists(prefs[listsKey]).filterNot { it.id == id }
             prefs[listsKey] = encodeLists(remaining)
+            removeCatalogControls(prefs, id)
             if (prefs[activeListKey] == id) {
                 val next = remaining.firstOrNull()?.id
                 if (next == null) prefs.remove(activeListKey) else prefs[activeListKey] = next

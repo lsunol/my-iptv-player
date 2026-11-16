@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+- Movies and Series can be sorted (provider order, "Añadidas recientemente",
+  "Estreno más reciente", "Mejor valoradas", A-Z) and filtered by language
+  (derived from category prefixes such as `ESPAÑA - …` / `|EN| …`), genre
+  (English and Spanish genres unified, shown in Spanish) and "Nota 7 o más".
+  Every option is offered only when the loaded catalogue actually carries the
+  data, so a panel without dates, ratings or genres gets fewer options instead
+  of sorts that do nothing; a refresh that removes the data resets the choice
+  with a notice. Choices persist, work in grid and list, and combine with the
+  category chips, search and favorites.
+- A long-press on a movie opens its detail (year, duration, genre, director,
+  plot, cast) loaded lazily from `get_vod_info`; tap still plays directly.
+  Series headers show the broadcast years computed from episode dates
+  (`2008 – 2013`), rating and runtime, and `releaseDate` from `get_series` when
+  the panel sends it.
+- Metadata parsing tolerates numbers sent as strings, `""`/`"0"`/`N/A`,
+  second or millisecond epochs, `YYYY`, `YYYY-MM-DD`, `DD/MM/YYYY`; bad values
+  become "unknown" and sort last. Old catalogue caches still load.
+- Playback errors where the provider answers a web page instead of video
+  (seen on a real panel's VOD server: HTML "Server Error" with a 2xx status)
+  now say so in Spanish instead of showing a raw Media3 error code.
 - Catalogue artwork is normalized before it reaches the image loader: a
   PHP-serialized path leaked into the JSON (`s:308:/images/x.jpeg`), a
   root-relative path and a protocol-relative URL are resolved against the

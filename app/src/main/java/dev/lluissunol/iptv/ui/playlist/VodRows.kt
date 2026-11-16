@@ -1,7 +1,9 @@
 package dev.lluissunol.iptv.ui.playlist
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +38,7 @@ import dev.lluissunol.iptv.data.model.VodItem
  * provided by the caller.
  */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun VodRow(
     posterUrl: String?,
     title: String,
@@ -43,14 +46,28 @@ private fun VodRow(
     qualityTag: String?,
     isFavorite: Boolean,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    onClickLabel: String? = null,
+    onLongClickLabel: String? = null
 ) {
     val cleanTitle = cleanChannelName(title)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick,
+                        onClickLabel = onClickLabel,
+                        onLongClick = onLongClick,
+                        onLongClickLabel = onLongClickLabel
+                    )
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            )
             .padding(horizontal = 8.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -103,7 +120,11 @@ internal fun MovieRow(
     item: VodItem,
     isFavorite: Boolean,
     onPlay: (VodItem) -> Unit,
-    onToggleFavorite: (VodItem) -> Unit
+    onToggleFavorite: (VodItem) -> Unit,
+    /** Long-press opens the movie detail; null (favourites) keeps a plain tap target. */
+    onOpenDetails: ((VodItem) -> Unit)? = null,
+    playLabel: String? = null,
+    detailsLabel: String? = null
 ) {
     VodRow(
         posterUrl = item.posterUrl,
@@ -112,7 +133,10 @@ internal fun MovieRow(
         qualityTag = item.qualityTag,
         isFavorite = isFavorite,
         onClick = { onPlay(item) },
-        onToggleFavorite = { onToggleFavorite(item) }
+        onToggleFavorite = { onToggleFavorite(item) },
+        onLongClick = onOpenDetails?.let { open -> { open(item) } },
+        onClickLabel = playLabel,
+        onLongClickLabel = detailsLabel
     )
 }
 
