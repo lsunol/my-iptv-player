@@ -442,7 +442,7 @@ class PlaylistRepository(
             // 50k-title account: it must never run on the caller's (Main)
             // dispatcher.
             withContext(Dispatchers.Default) {
-                val merged = buildVodCatalog(api, matcher, fallback)
+                val merged = buildVodCatalog(api, matcher, fallback, serverBase = config.server)
                 // An API that answers with empty catalogues while the M3U clearly
                 // has /movie/ or /series/ entries did not work (several forks send
                 // `[]` or a user_info object on failure): degrade instead of
@@ -513,7 +513,8 @@ class PlaylistRepository(
                 seriesId = seriesId,
                 defaultName = "Serie $seriesId",
                 matcher = matcher,
-                fallbackUrl = fallback
+                fallbackUrl = fallback,
+                serverBase = config.server
             )
         }
         synchronized(seriesInfoCache) { seriesInfoCache[cacheKey] = info }

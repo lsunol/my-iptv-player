@@ -307,7 +307,8 @@ internal fun SeriesInfoDto.toSeriesInfo(
     seriesId: Long,
     defaultName: String,
     matcher: XtreamStreamMatcher?,
-    fallbackUrl: (type: String, id: String) -> String?
+    fallbackUrl: (type: String, id: String) -> String?,
+    serverBase: String? = null
 ): SeriesInfo {
     val info = infoObject()
     val name = info?.text("name")?.takeIf { it.isNotBlank() }
@@ -355,7 +356,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
         seriesId = seriesId,
         name = name,
         plot = info?.text("plot"),
-        posterUrl = info?.text("cover"),
+        posterUrl = normalizeArtworkUrl(info?.text("cover"), serverBase),
         seasons = seasons.sortedBy { it.number }
     )
 }

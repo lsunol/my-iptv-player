@@ -60,15 +60,42 @@ class CatalogNoticeTest {
         catalogWarning: CatalogWarning? = null,
         tab: SourceType? = SourceType.MOVIE,
         searchAll: Boolean = false,
-        isLoading: Boolean = false
+        isLoading: Boolean = false,
+        unreachablePosters: Int = 0
     ) = catalogNotice(
         kind = kind,
         catalog = catalog,
         catalogWarning = catalogWarning,
         tab = tab,
         searchAll = searchAll,
-        isLoading = isLoading
+        isLoading = isLoading,
+        unreachablePosters = unreachablePosters
     )
+
+    // ---------------------------------------------- unreachable poster host
+
+    @Test
+    fun unreachablePostersAreExplainedOnTheirTab() {
+        assertEquals(
+            CatalogNotice(CatalogNoticeKind.INFO, CatalogNoticeText.PostersUnreachable(1, 1)),
+            notice(catalog = catalog, tab = SourceType.SERIES, unreachablePosters = 1)
+        )
+        assertEquals(CatalogNotice.None, notice(catalog = catalog, tab = SourceType.SERIES))
+        assertEquals(CatalogNotice.None, notice(catalog = catalog, tab = SourceType.LIVE, unreachablePosters = 5))
+    }
+
+    @Test
+    fun aDecodeWarningOutranksTheUnreachablePosterNotice() {
+        assertEquals(
+            CatalogNotice(CatalogNoticeKind.INFO, CatalogNoticeText.SkippedItems(2)),
+            notice(
+                catalog = catalog,
+                tab = SourceType.SERIES,
+                catalogWarning = CatalogWarning.SkippedItems(2),
+                unreachablePosters = 1
+            )
+        )
+    }
 
     // ------------------------------------------------- the reported defect
 
@@ -291,7 +318,8 @@ class CatalogNoticeTest {
                     "catalog_skipped_items",
                     "catalog_empty_response",
                     "catalog_invalid_json",
-                    "catalog_unexpected_format"
+                    "catalog_unexpected_format",
+                    "catalog_posters_unreachable"
                 )
             )
         )

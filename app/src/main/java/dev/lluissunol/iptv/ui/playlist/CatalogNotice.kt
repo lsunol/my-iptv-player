@@ -41,6 +41,12 @@ sealed interface CatalogNoticeText {
 
     data object UnexpectedFormat : CatalogNoticeText
 
+    /**
+     * [count] of the tab's [total] posters point at an image host that refuses
+     * connections: the provider's artwork server is unreachable.
+     */
+    data class PostersUnreachable(val count: Int, val total: Int) : CatalogNoticeText
+
     /** Cross-type search: the flat list is intentional, not a degradation. */
     data object SearchAll : CatalogNoticeText
 }
@@ -68,7 +74,9 @@ data class CatalogNotice(
  * 3. A plain-URL list is never augmented with API calls (AGENTS.md), so it has
  *    no catalogue and nothing to explain: never a notice.
  * 4. With a catalogue, only a decode warning remains worth showing, passively:
- *    the grid works.
+ *    the grid works. Without one, posters whose image host refuses
+ *    connections ([unreachablePosters] of the current tab) get a passive line,
+ *    so a grid of placeholders is explained instead of looking broken.
  * 5. Without a catalogue but with a warning, the last refresh failed while the
  *    M3U worked: explain and offer the retry.
  * 6. Without both, the catalogue has simply not been downloaded for this list
@@ -82,7 +90,8 @@ fun catalogNotice(
     catalogWarning: CatalogWarning?,
     tab: SourceType?,
     searchAll: Boolean,
-    isLoading: Boolean
+    isLoading: Boolean,
+    unreachablePosters: Int = 0
 ): CatalogNotice {
     if (tab != SourceType.MOVIE && tab != SourceType.SERIES) return CatalogNotice.None
     if (searchAll) {
@@ -94,9 +103,15 @@ fun catalogNotice(
     }
     if (kind == PlaylistKind.URL) return CatalogNotice.None
     if (catalog != null) {
-        return catalogWarning
-            ?.let { CatalogNotice(CatalogNoticeKind.INFO, it.toNoticeText()) }
-            ?: CatalogNotice.None
+        catalogWarning?.let { return CatalogNotice(CatalogNoticeKind.INFO, it.toNoticeText()) }
+        if (unreachablePosters > 0) {
+            val total = if (tab == SourceType.MOVIE) catalog.movies.size else catalog.series.size
+            return CatalogNotice(
+                CatalogNoticeKind.INFO,
+                CatalogNoticeText.PostersUnreachable(unreachablePosters.coerceAtMost(total), total)
+            )
+        }
+        return CatalogNotice.None
     }
     if (catalogWarning != null) {
         return CatalogNotice(

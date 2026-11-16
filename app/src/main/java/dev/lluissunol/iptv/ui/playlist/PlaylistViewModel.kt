@@ -11,6 +11,7 @@ import dev.lluissunol.iptv.data.SearchNormalizer
 import dev.lluissunol.iptv.data.SettingsStore
 import dev.lluissunol.iptv.data.VodLayout
 import dev.lluissunol.iptv.data.XtreamCache
+import dev.lluissunol.iptv.data.countUnreachablePosters
 import dev.lluissunol.iptv.data.model.CatalogWarning
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Episode
@@ -36,6 +37,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -134,8 +137,19 @@ data class UiState(
     val seriesInfo: SeriesInfo? = null,
     val seriesLoading: Boolean = false,
     val seriesError: String? = null,
-    val selectedSeason: Int? = null
+    val selectedSeason: Int? = null,
+    /** Catalogue posters (movies / series) whose image host refuses connections. */
+    val unreachableMoviePosters: Int = 0,
+    val unreachableSeriesPosters: Int = 0
 ) {
+    /** Unreachable posters of the current tab, for the notice line. */
+    val unreachablePostersInTab: Int
+        get() = when (tab) {
+            SourceType.MOVIE -> unreachableMoviePosters
+            SourceType.SERIES -> unreachableSeriesPosters
+            else -> 0
+        }
+
     val counts: Map<SourceType, Int> get() = playlist?.counts ?: emptyMap()
     val groups: List<GroupCount>
         get() = playlist?.groupsFor(if (searchAll) null else tab).orEmpty()
@@ -239,6 +253,31 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
         }
         viewModelScope.launch { deriveFavorites() }
+        viewModelScope.launch {
+            // Posters on a host that refuses connections (a firewalled Plex
+            // server is common) can never load: count them so the notice can
+            // say so instead of leaving a silent grid of placeholders.
+            combine(
+                app.imageHostHealth.unreachableHosts,
+                _state.map { it.catalog }.distinctUntilChanged { a, b -> a === b }
+            ) { hosts, catalog -> hosts to catalog }
+                .collectLatest { (hosts, catalog) ->
+                    val counts = if (catalog == null || hosts.isEmpty()) {
+                        0 to 0
+                    } else {
+                        withContext(Dispatchers.Default) {
+                            countUnreachablePosters(catalog.movies.asSequence().map { it.posterUrl }, hosts) to
+                                countUnreachablePosters(catalog.series.asSequence().map { it.posterUrl }, hosts)
+                        }
+                    }
+                    _state.update {
+                        it.copy(
+                            unreachableMoviePosters = counts.first,
+                            unreachableSeriesPosters = counts.second
+                        )
+                    }
+                }
+        }
         viewModelScope.launch {
             // A failed read (corrupt prefs) degrades to "no lists", never a crash.
             val loaded = runCatching {

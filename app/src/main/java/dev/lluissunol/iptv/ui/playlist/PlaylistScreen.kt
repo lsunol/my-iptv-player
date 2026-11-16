@@ -457,7 +457,8 @@ private fun PlaylistContent(
             catalogWarning = state.catalogWarning,
             tab = state.tab,
             searchAll = state.searchAll,
-            isLoading = state.isLoading
+            isLoading = state.isLoading,
+            unreachablePosters = state.unreachablePostersInTab
         )
         notice.text?.let { text ->
             NoticeLine(
@@ -690,6 +691,8 @@ private fun noticeText(text: CatalogNoticeText): String = when (text) {
     CatalogNoticeText.EmptyResponse -> stringResource(R.string.catalog_empty_response)
     CatalogNoticeText.InvalidJson -> stringResource(R.string.catalog_invalid_json)
     CatalogNoticeText.UnexpectedFormat -> stringResource(R.string.catalog_unexpected_format)
+    is CatalogNoticeText.PostersUnreachable ->
+        stringResource(R.string.catalog_posters_unreachable, text.count, text.total)
     CatalogNoticeText.SearchAll -> stringResource(R.string.catalog_search_all)
 }
 

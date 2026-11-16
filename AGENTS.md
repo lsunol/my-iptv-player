@@ -542,6 +542,25 @@ Read the matching skill before touching that area. Project skills live in
   a force-stop and relaunch (the new track session was created already muted).
   Screenshots: `captures/player-muted.png`, `captures/player-fullscreen-muted.png`.
   Not verified on a physical phone; the DataStore write-failure path is untested.
+- **2026-11-15 — series covers, emulator (API 36)**: root cause of "series
+  show no poster" on the real Xtream account is the provider's data, not the
+  app. `get_series` (2,351 series): 2,103 `cover` URLs point at two private Plex
+  `:32400` hosts that refuse TCP connections (from the PC and from the emulator
+  via `toybox nc`), 145 are a PHP-serialized relative path
+  (`s:308:/images/...`) that the panel answers with 404, 102 are
+  `image.tmdb.org` and load. `get_series_info` (30 series sampled) repeats the
+  same Plex host for the cover, the seasons and all 357 episode `movie_image`s;
+  the M3U's `tvg-logo` too. Movies are 100% `image.tmdb.org` and load. No
+  third-party metadata service is used to fill the gap (licence and privacy
+  rules). The app now normalizes artwork URLs, short-circuits refused image
+  hosts for 5 min, and shows "2103 de 2351 portadas no se pueden mostrar…" on
+  the Series tab — the count matched the server-side analysis exactly. A
+  TMDB cover ("Un caballero en Moscú") rendered in the grid. A local fake panel
+  (`scripts/fake-xtream-artwork.mjs`, served at `10.0.2.2:8787`) proved the
+  PHP-serialized, root-relative and absolute covers render, a refused host
+  falls back to the initial with "1 de 5 portadas…", and the series detail
+  shows the `s:NN:` cover from `get_series_info`. 0 `FATAL EXCEPTION`.
+  Screenshots: `captures/series-covers/`. Not verified on a physical phone.
 
 ## Known traps
 

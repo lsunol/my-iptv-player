@@ -1,5 +1,6 @@
 # --- IPTV credentials / personal data (never commit) ---
 local/
+xtream-credentials.json
 *.url
 *.m3u8.url
 *.m3u

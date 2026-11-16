@@ -47,6 +47,7 @@
     <string name="catalog_skipped_items">Se omitieron %1$d elementos del catálogo por datos no válidos.</string>
     <string name="catalog_empty_response">El proveedor respondió sin datos del catálogo.</string>
     <string name="catalog_invalid_json">El catálogo del proveedor no era JSON válido.</string>
+    <string name="catalog_posters_unreachable">%1$d de %2$d portadas no se pueden mostrar: el servidor de imágenes que indica el proveedor rechaza la conexión.</string>
     <string name="catalog_unexpected_format">El catálogo del proveedor no tenía el formato esperado.</string>
     <string name="empty_category">No hay títulos en esta categoría.</string>
     <string name="episode_number">Temporada %1$d · Episodio %2$d</string>

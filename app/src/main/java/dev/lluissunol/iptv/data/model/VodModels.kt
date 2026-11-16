@@ -3,6 +3,7 @@ package dev.lluissunol.iptv.data.model
 import dev.lluissunol.iptv.data.SearchNormalizer
 import dev.lluissunol.iptv.data.XtreamApiCatalog
 import dev.lluissunol.iptv.data.XtreamStreamMatcher
+import dev.lluissunol.iptv.data.normalizeArtworkUrl
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -123,12 +124,15 @@ data class VodCatalog(
  * - an unmatched movie falls back to `fallbackUrl("movie", id)` (the provider's
  *   own `.m3u8` pattern) and gets the same URL-hash favorite key the parser
  *   would have built for a channel with that URL;
- * - series use the stable `series:<series_id>` key.
+ * - series use the stable `series:<series_id>` key;
+ * - artwork goes through [normalizeArtworkUrl] (PHP-serialized and relative
+ *   paths are resolved against [serverBase], junk becomes `null`).
  */
 fun buildVodCatalog(
     api: XtreamApiCatalog,
     matcher: XtreamStreamMatcher,
-    fallbackUrl: (type: String, id: String) -> String?
+    fallbackUrl: (type: String, id: String) -> String?,
+    serverBase: String? = null
 ): VodCatalog {
     val movies = ArrayList<VodItem>(api.vodStreams.size)
     // The poster grid uses `movie:<id>` as its LazyGrid key, so the ids must be
@@ -145,7 +149,7 @@ fun buildVodCatalog(
         movies += VodItem(
             streamId = dto.streamId,
             name = name,
-            posterUrl = dto.streamIcon?.trim()?.takeIf { it.isNotEmpty() },
+            posterUrl = normalizeArtworkUrl(dto.streamIcon, serverBase),
             categoryId = dto.categoryId,
             rating = dto.rating.takeIf { it > 0.0 } ?: 0.0,
             searchKey = SearchNormalizer.key(name),
@@ -164,7 +168,7 @@ fun buildVodCatalog(
         series += SeriesCard(
             seriesId = dto.seriesId,
             name = name,
-            posterUrl = dto.cover?.trim()?.takeIf { it.isNotEmpty() },
+            posterUrl = normalizeArtworkUrl(dto.cover, serverBase),
             plot = dto.plot?.trim()?.takeIf { it.isNotEmpty() },
             categoryId = dto.categoryId,
             rating = dto.rating.takeIf { it > 0.0 } ?: 0.0,

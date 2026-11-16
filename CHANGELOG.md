@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Catalogue artwork is normalized before it reaches the image loader: a
+  PHP-serialized path leaked into the JSON (`s:308:/images/x.jpeg`), a
+  root-relative path and a protocol-relative URL are resolved against the
+  panel's server, and junk becomes the generated placeholder instead of a
+  request that cannot succeed. Applies to movie and series posters and to the
+  series detail cover.
+- Posters whose image host refuses connections are explained instead of
+  leaving a silent grid of initials: "N de M portadas no se pueden mostrar: el
+  servidor de imágenes que indica el proveedor rechaza la conexión." After the
+  first refused connection the host is skipped for 5 minutes (no socket per
+  grid cell), then probed again. Some panels point series covers at a private
+  Plex `:32400` server that is firewalled from the internet; the app cannot
+  show those, and now it says so.
 - Playback can be muted from the player, in the top bar and in fullscreen. It
   silences only the app's own output: the phone's volume and any other app
   playing audio are left alone, so a channel can be watched while listening to
