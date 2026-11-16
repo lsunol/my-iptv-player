@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open IPTV — un reproductor IPTV sencillo y abierto para Android</title>
+  <meta name="description" content="Reproductor IPTV para Android, de código abierto. Pega tu lista M3U o Xtream y mira. Sin cuentas, sin anuncios, sin analíticas.">
+  <meta name="theme-color" content="#070B12">
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/brand/icon-512.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Open IPTV">
+  <meta property="og:description" content="Un reproductor IPTV para Android sencillo, transparente y de código abierto.">
+  <meta property="og:image" content="assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <header class="nav">
+    <a class="nav__brand" href="#top" aria-label="Open IPTV, inicio">
+      <img src="assets/brand/mark.svg" alt="" width="32" height="32">
+      <span>Open IPTV</span>
+    </a>
+    <nav aria-label="Secciones">
+      <a href="#funciones">Funciones</a>
+      <a href="#descargar">Descargar</a>
+      <a href="#autor">Autor</a>
+      <a href="https://github.com/lsunol/my-iptv-player" rel="noopener">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- 1. HERO -->
+    <section class="hero" id="top">
+      <div class="hero__text">
+        <p class="eyebrow">Android · Código abierto · GPL-3.0</p>
+        <h1>Tu lista.<br><span class="grad">Tu reproductor.</span><br>Nada más.</h1>
+        <p class="lead">
+          Open IPTV es un reproductor IPTV pequeño y transparente. Pegas tu lista
+          M3U o Xtream, buscas un canal y lo ves. Sin cuentas, sin anuncios,
+          sin analíticas.
+        </p>
+        <div class="cta">
+          <a class="btn btn--primary" href="https://github.com/lsunol/my-iptv-player/releases/latest/download/open-iptv.apk">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+            Descargar APK
+          </a>
+          <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player" rel="noopener">Ver el código</a>
+        </div>
+        <p class="meta" data-release>Android 7.0 o superior</p>
+      </div>
+      <div class="hero__phone">
+        <div class="phone">
+          <img src="assets/screens/hero.png" alt="Lista de canales en directo de Open IPTV" width="1080" height="2340">
+        </div>
+      </div>
+    </section>
+
+    <!-- Principios -->
+    <section class="pills" aria-label="Principios">
+      <ul>
+        <li>Sin cuenta</li>
+        <li>Sin anuncios</li>
+        <li>Sin analíticas</li>
+        <li>Sin servidores propios</li>
+        <li>Viene vacía</li>
+        <li>Código abierto</li>
+      </ul>
+    </section>
+
+    <!-- 2. STORY: scroll con teléfono sticky -->
+    <section class="story" id="funciones">
+      <div class="story__steps">
+        <article class="step" data-step="0">
+          <p class="step__n">01</p>
+          <h2>Tus listas, con nombre</h2>
+          <p>
+            Añade una o varias listas (URL M3U/M3U8 o servidor Xtream), ponles
+            nombre y cambia entre ellas. Las credenciales se ocultan en pantalla
+            y todo se guarda solo en tu móvil.
+          </p>
+          <img class="step__img" src="assets/screens/step-lists.png" alt="Pantalla de listas guardadas" loading="lazy" width="1080" height="2340">
+        </article>
+        <article class="step" data-step="1">
+          <p class="step__n">02</p>
+          <h2>Miles de canales, encontrados al momento</h2>
+          <p>
+            Pestañas de Directo, Películas y Series, filtro por grupo y búsqueda
+            que ignora tildes y mayúsculas: escribe «espana» y encuentra
+            «ESPAÑA». Pensado para listas de decenas de miles de entradas.
+          </p>
+          <img class="step__img" src="assets/screens/step-search.png" alt="Búsqueda de canales sin tildes" loading="lazy" width="1080" height="2340">
+        </article>
+        <article class="step" data-step="2">
+          <p class="step__n">03</p>
+          <h2>Películas y series con carátula</h2>
+          <p>
+            Con un servidor Xtream, las películas y series se muestran en
+            cuadrícula con su portada, ordenables y filtrables, y las series se
+            abren por temporadas y episodios.
+          </p>
+          <img class="step__img" src="assets/screens/step-catalog.png" alt="Cuadrícula de películas con portadas" loading="lazy" width="1080" height="2340">
+        </article>
+      </div>
+      <div class="story__sticky" aria-hidden="true">
+        <div class="phone phone--stack">
+          <img src="assets/screens/step-lists.png" alt="" class="is-active" width="1080" height="2340">
+          <img src="assets/screens/step-search.png" alt="" loading="lazy" width="1080" height="2340">
+          <img src="assets/screens/step-catalog.png" alt="" loading="lazy" width="1080" height="2340">
+        </div>
+        <ol class="dots"><li class="is-active"></li><li></li><li></li></ol>
+      </div>
+    </section>
+
+    <!-- Banda apaisada -->
+    <section class="wide">
+      <div class="wide__frame">
+        <img src="assets/screens/player-landscape.png" alt="Reproducción a pantalla completa en horizontal" loading="lazy" width="2340" height="1080">
+      </div>
+      <div class="features">
+        <div>
+          <h3>Pantalla completa de verdad</h3>
+          <p>Horizontal e inmersiva, con salida explícita. Girar el móvil no corta la emisión.</p>
+        </div>
+        <div>
+          <h3>Errores que se entienden</h3>
+          <p>«Suscripción caducada», «servidor no encontrado», «formato no soportado»… nunca un «error desconocido».</p>
+        </div>
+        <div>
+          <h3>Funciona sin conexión al abrir</h3>
+          <p>Guarda la última lista que funcionó. Si una actualización falla, conservas la anterior.</p>
+        </div>
+        <div>
+          <h3>Favoritos y silencio</h3>
+          <p>Favoritos por categoría y un botón para silenciar solo la app, sin tocar el volumen del móvil.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DESCARGAR -->
+    <section class="download" id="descargar">
+      <h2>Descargar</h2>
+      <p class="lead">Gratis y sin registro. El APK está firmado con la clave del proyecto, así que las versiones nuevas se instalan encima sin perder tus listas.</p>
+      <div class="cta cta--center">
+        <a class="btn btn--primary" href="https://github.com/lsunol/my-iptv-player/releases/latest/download/open-iptv.apk">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+          Descargar APK
+        </a>
+        <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player/releases" rel="noopener">Todas las versiones</a>
+      </div>
+      <p class="meta" data-release>Android 7.0 o superior</p>
+
+      <div class="cards">
+        <div class="card">
+          <h3>1 · Descarga</h3>
+          <p>Abre esta página en el móvil y pulsa <em>Descargar APK</em>.</p>
+        </div>
+        <div class="card">
+          <h3>2 · Permite la instalación</h3>
+          <p>Android te pedirá permiso para instalar desde el navegador. Acéptalo solo para este archivo.</p>
+        </div>
+        <div class="card">
+          <h3>3 · Pega tu lista</h3>
+          <p>Abre la app, añade la URL de tu proveedor y listo.</p>
+        </div>
+      </div>
+
+      <details class="verify">
+        <summary>¿Quieres comprobar que el APK es el original?</summary>
+        <p>Cada versión publica el SHA-256 del APK en sus notas. Compáralo con:</p>
+        <pre><code>sha256sum open-iptv.apk</code></pre>
+        <p>O compila tú mismo la app desde el <a href="https://github.com/lsunol/my-iptv-player">código fuente</a>.</p>
+      </details>
+    </section>
+
+    <!-- Aviso legal -->
+    <section class="notice" id="aviso">
+      <h2>Qué no es Open IPTV</h2>
+      <p>
+        Open IPTV es solo un reproductor. <strong>No incluye canales, listas ni
+        proveedores</strong>, y no te ayudará a encontrarlos. Necesitas una lista
+        que tengas derecho a usar. No está afiliada a ningún proveedor ni
+        cadena.
+      </p>
+      <h3 id="privacidad">Privacidad</h3>
+      <p>
+        La app no recoge ningún dato. Solo se conecta a las direcciones que tú
+        le das: tu lista, los canales y sus logotipos. Tus listas y favoritos
+        se guardan en tu móvil y en ningún otro sitio. Esta web no usa cookies
+        ni analíticas.
+      </p>
+    </section>
+
+    <!-- AUTOR -->
+    <section class="about" id="autor">
+      <img class="about__avatar" src="assets/about/avatar.jpg" alt="Lluís Suñol" width="400" height="400" loading="lazy">
+      <div>
+        <p class="eyebrow">Autor</p>
+        <h2>Hecho por Lluís Suñol</h2>
+        <p>
+          Hice Open IPTV porque quería un reproductor que hiciera una cosa y la
+          hiciera bien, sin cuentas ni publicidad, y que explicara qué pasa cuando
+          algo falla. Es código abierto: puedes leerlo, compilarlo y mejorarlo.
+        </p>
+        <ul class="links">
+          <li><a href="https://lluissunol.dev" rel="me noopener">lluissunol.dev</a></li>
+          <li><a href="https://github.com/lsunol" rel="me noopener">GitHub</a></li>
+          <li><a href="https://www.linkedin.com/in/lluissunol/" rel="me noopener">LinkedIn</a></li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>© <span data-year>2026</span> Lluís Suñol · Open IPTV es software libre bajo licencia <a href="https://github.com/lsunol/my-iptv-player/blob/main/LICENSE">GPL-3.0</a>.</p>
+    <p class="footer__small">Las capturas usan listas de demostración. Sintel © Blender Foundation, CC BY 3.0.</p>
+  </footer>
+</body>
+</html>
