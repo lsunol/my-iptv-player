@@ -24,7 +24,12 @@
     <string name="tagline">Tu IPTV, simple.</string>
     <string name="search_hint">Buscar canal, grupo…</string>
     <string name="channels_count">%1$s canales</string>
-    <string name="warning_count">%1$d avisos</string>
+    <plurals name="warning_count">
+        <item quantity="one">%1$d aviso</item>
+        <item quantity="other">%1$d avisos</item>
+    </plurals>
+    <string name="meta_separator"> · </string>
+    <string name="updated_date_time">%1$s · %2$s</string>
     <string name="cancel">Cancelar</string>
     <string name="clear">Limpiar</string>
     <string name="other">Otros</string>
@@ -69,9 +74,8 @@
     <string name="delete_list_title">¿Eliminar esta lista?</string>
     <string name="delete_list_message">Se borrarán su configuración y los canales guardados. Los favoritos no se tocan.</string>
     <string name="delete">Eliminar</string>
-    <string name="back_to_lists">Volver a las listas</string>
     <string name="list_loading_subtitle">Abriendo la lista. Si ya estaba guardada no se usará la red.</string>
-    <string name="list_last_used">Última usada</string>
+    <string name="list_last_used">Activa</string>
     <string name="list_updated_at">Actualizada %1$s</string>
     <string name="list_kind_url">URL</string>
     <string name="list_kind_xtream">Xtream</string>
@@ -230,4 +234,39 @@
     <string name="series_years_range">%1$d – %2$d</string>
     <string name="series_years_range_cd">Emitida de %1$d a %2$d</string>
     <string name="series_runtime">%1$d min por episodio</string>
+    <!-- Cabecera compacta -->
+    <string name="header_title_cd">Lista activa: %1$s. Cambiar o añadir lista</string>
+    <string name="header_title_cd_updated">Lista activa: %1$s. %2$s. Cambiar o añadir lista</string>
+    <string name="header_updated">Actualizada %1$s</string>
+    <string name="updated_when_today">hoy · %1$s</string>
+    <string name="updated_when_yesterday">ayer · %1$s</string>
+    <string name="header_never_updated">Aún sin descargar</string>
+    <string name="updated_cd_today">Actualizada hoy a las %1$s</string>
+    <string name="updated_cd_yesterday">Actualizada ayer a las %1$s</string>
+    <string name="updated_cd_date">Actualizada el %1$s a las %2$s</string>
+    <string name="updated_cd_day">Actualizada el %1$s</string>
+    <string name="search">Buscar</string>
+    <string name="search_close">Cerrar búsqueda</string>
+    <string name="search_hint_titles">Buscar título…</string>
+    <string name="more_options">Más opciones</string>
+    <string name="refreshing_cd">Actualizando la lista…</string>
+    <string name="switch_list">Cambiar de lista</string>
+    <string name="back_to_active_list">Volver a la lista activa</string>
+    <string name="group_chip">Grupo: %1$s</string>
+    <string name="group_chip_cd">Grupo: %1$s. Elegir grupo</string>
+    <string name="group_clear_cd">Quitar el grupo %1$s</string>
+    <string name="groups_sheet_title">Grupos (%1$s)</string>
+    <string name="groups_filter_hint">Filtrar grupos</string>
+    <string name="groups_all">Todos los grupos</string>
+    <string name="groups_none_match">Ningún grupo coincide con «%1$s».</string>
+    <string name="category_chip">Categoría</string>
+    <string name="category_chip_cd">Categoría: %1$s. Elegir categoría</string>
+    <string name="category_clear_cd">Quitar la categoría %1$s</string>
+    <string name="categories_sheet_title">Categorías (%1$s)</string>
+    <string name="categories_filter_hint">Filtrar categorías</string>
+    <string name="categories_all">Todas las categorías</string>
+    <string name="categories_none_match">Ninguna categoría coincide con «%1$s».</string>
+    <string name="picker_filter_clear">Borrar filtro</string>
+    <string name="channels_count_of">%1$s de %2$s canales</string>
+    <string name="empty_group_action">Ver todos los grupos</string>
 </resources>

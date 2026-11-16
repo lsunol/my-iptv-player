@@ -66,6 +66,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -87,6 +89,10 @@ import androidx.compose.runtime.remember
 import dev.lluissunol.iptv.data.GenreNormalizer
 import dev.lluissunol.iptv.data.CatalogSort
 import dev.lluissunol.iptv.data.VodLayout
+import dev.lluissunol.iptv.data.PickerEntry
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import dev.lluissunol.iptv.data.cleanDisplayName
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Playlist
@@ -119,10 +125,12 @@ internal fun PlaylistScreen(
     vodListState: LazyListState,
     scrollVersions: ScrollVersions,
     actions: CatalogActions,
-    onBackToLists: () -> Unit,
+    onShowLists: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onQueryChange: (String) -> Unit,
+    onOpenSearch: () -> Unit,
+    onCloseSearch: () -> Unit,
     onTabChange: (SourceType?) -> Unit,
     onSearchAllChange: (Boolean) -> Unit,
     onGroupChange: (String?) -> Unit,
@@ -136,8 +144,9 @@ internal fun PlaylistScreen(
     onEditActiveList: () -> Unit,
     onClearError: () -> Unit
 ) {
-    // Back returns to the lists so the user can switch playlists (requirement 2).
-    BackHandler { onBackToLists() }
+    // Back closes search (clearing the query) first. Otherwise no handler is
+    // enabled, so back at the playlist root leaves the app.
+    BackHandler(enabled = state.searchMode) { onCloseSearch() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -145,10 +154,14 @@ internal fun PlaylistScreen(
         topBar = {
             AppHeader(
                 state = state,
-                onBackToLists = onBackToLists,
+                onShowLists = onShowLists,
                 onRefresh = onRefresh,
                 onShowFavorites = onShowFavorites,
-                onEditActiveList = onEditActiveList
+                onEditActiveList = onEditActiveList,
+                onOpenSearch = onOpenSearch,
+                onCloseSearch = onCloseSearch,
+                onQueryChange = onQueryChange,
+                onSearchAllChange = onSearchAllChange
             )
         }
     ) { padding ->
@@ -161,7 +174,8 @@ internal fun PlaylistScreen(
                 ListLoadPane(
                     state = state,
                     onRetry = onRetry,
-                    onBackToLists = onBackToLists,
+                    onEditList = onEditActiveList,
+                    onSwitchList = onShowLists,
                     onClearError = onClearError
                 )
             } else {
@@ -171,9 +185,7 @@ internal fun PlaylistScreen(
                     vodListState = vodListState,
                     scrollVersions = scrollVersions,
                     actions = actions,
-                    onQueryChange = onQueryChange,
                     onTabChange = onTabChange,
-                    onSearchAllChange = onSearchAllChange,
                     onGroupChange = onGroupChange,
                     onVodCategoryChange = onVodCategoryChange,
                     onVodLayoutToggle = onVodLayoutToggle,
@@ -198,7 +210,8 @@ internal fun PlaylistScreen(
 private fun ListLoadPane(
     state: UiState,
     onRetry: () -> Unit,
-    onBackToLists: () -> Unit,
+    onEditList: () -> Unit,
+    onSwitchList: () -> Unit,
     onClearError: () -> Unit
 ) {
     Column(
@@ -226,121 +239,20 @@ private fun ListLoadPane(
             ErrorCard(error = message, onRetry = onRetry, onDismiss = onClearError)
         }
 
-        TextButton(
-            onClick = onBackToLists,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
+        Row(
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(stringResource(R.string.back_to_lists))
+            TextButton(onClick = onEditList, enabled = state.activeList != null) {
+                Text(stringResource(R.string.edit_list))
+            }
+            TextButton(onClick = onSwitchList) {
+                Text(stringResource(R.string.switch_list))
+            }
         }
 
         Spacer(Modifier.height(24.dp))
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AppHeader(
-    state: UiState,
-    onBackToLists: () -> Unit,
-    onRefresh: () -> Unit,
-    onShowFavorites: () -> Unit,
-    onEditActiveList: () -> Unit
-) {
-    val subtitle = buildString {
-        append(state.activeList?.name ?: stringResource(R.string.tagline))
-        state.playlist?.let { playlist ->
-            append(" · ")
-            append(stringResource(R.string.channels_count, formatNumber(playlist.channels.size)))
-            state.lastUpdated?.let { append(" · " + shortDate(it)) }
-        }
-    }
-
-    TopAppBar(
-        modifier = Modifier.background(
-            Brush.verticalGradient(
-                listOf(Color(0xFF0B2A28), MaterialTheme.colorScheme.background)
-            )
-        ),
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-        navigationIcon = {
-            IconButton(onClick = onBackToLists) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.back_to_lists)
-                )
-            }
-        },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(R.drawable.logo_mark),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                )
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        },
-        actions = {
-            if (state.playlist != null) {
-                IconButton(onClick = onShowFavorites) {
-                    Icon(
-                        imageVector = if (state.favoriteKeys.isEmpty()) {
-                            Icons.Default.StarBorder
-                        } else {
-                            Icons.Default.Star
-                        },
-                        contentDescription = stringResource(R.string.favorites),
-                        tint = if (state.favoriteKeys.isEmpty()) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        }
-                    )
-                }
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !state.isLoading
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.refresh)
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = onEditActiveList,
-                    enabled = state.activeList != null
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.edit_list)
-                    )
-                }
-            }
-        }
-    )
 }
 
 @Composable
@@ -419,9 +331,7 @@ private fun PlaylistContent(
     vodListState: LazyListState,
     scrollVersions: ScrollVersions,
     actions: CatalogActions,
-    onQueryChange: (String) -> Unit,
     onTabChange: (SourceType?) -> Unit,
-    onSearchAllChange: (Boolean) -> Unit,
     onGroupChange: (String?) -> Unit,
     onVodCategoryChange: (String?) -> Unit,
     onVodLayoutToggle: () -> Unit,
@@ -444,26 +354,67 @@ private fun PlaylistContent(
         FilterSheet(state = state, onDismiss = { showFilters = false }, actions = actions)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        if (state.isLoading) {
-            RefreshProgress(state)
+    // Group / category pickers: one instance of sheet state each. Entries (and
+    // their normalized search keys) are built once per source list, never per
+    // keystroke or per row.
+    var showGroupSheet by rememberSaveable { mutableStateOf(false) }
+    var showCategorySheet by rememberSaveable { mutableStateOf(false) }
+    // The chip that opened a picker gets focus back when the sheet closes.
+    val pickerChipFocus = remember { FocusRequester() }
+    var restoreChipFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(restoreChipFocus) {
+        if (restoreChipFocus) {
+            runCatching { pickerChipFocus.requestFocus() }
+            restoreChipFocus = false
         }
+    }
+    val groupEntries = remember(state.groups) {
+        state.groups.map { PickerEntry.of(it.name, it.name, it.count) }
+    }
+    val categories = state.visibleVodCategories
+    val categoryEntries = remember(categories) {
+        categories.map { PickerEntry.of(it.id, it.name, null) }
+    }
+    val groupPickerAvailable = !state.isCatalogTab && groupEntries.isNotEmpty()
+    val categoryPickerAvailable = state.isCatalogTab && categoryEntries.isNotEmpty()
+    // A tab change or a refresh can take the data away: close instead of showing a stale sheet.
+    LaunchedEffect(groupPickerAvailable) { if (!groupPickerAvailable) showGroupSheet = false }
+    LaunchedEffect(categoryPickerAvailable) { if (!categoryPickerAvailable) showCategorySheet = false }
+    if (showGroupSheet && groupPickerAvailable) {
+        PickerSheet(
+            titleRes = R.string.groups_sheet_title,
+            hintRes = R.string.groups_filter_hint,
+            allRes = R.string.groups_all,
+            noMatchRes = R.string.groups_none_match,
+            entries = groupEntries,
+            allCount = state.tabCount(if (state.searchAll) null else state.tab),
+            selectedId = state.selectedGroup,
+            onSelect = onGroupChange,
+            onDismiss = {
+                showGroupSheet = false
+                restoreChipFocus = true
+            }
+        )
+    }
+    if (showCategorySheet && categoryPickerAvailable) {
+        PickerSheet(
+            titleRes = R.string.categories_sheet_title,
+            hintRes = R.string.categories_filter_hint,
+            allRes = R.string.categories_all,
+            noMatchRes = R.string.categories_none_match,
+            entries = categoryEntries,
+            allCount = null,
+            selectedId = state.selectedVodCategory,
+            onSelect = onVodCategoryChange,
+            onDismiss = {
+                showCategorySheet = false
+                restoreChipFocus = true
+            }
+        )
+    }
 
-        Spacer(Modifier.height(4.dp))
+    Column(Modifier.fillMaxSize()) {
         TabPills(state = state, onTabChange = onTabChange)
-
-        SearchField(
-            query = state.query,
-            onQueryChange = onQueryChange,
-            searchAll = state.searchAll,
-            onSearchAllChange = onSearchAllChange
-        )
-
-        FilterRow(
-            state = state,
-            onGroupChange = onGroupChange,
-            onVodCategoryChange = onVodCategoryChange
-        )
 
         if (state.isCatalogTab && state.activeSheetFilters > 0) {
             ActiveFilterChips(state = state, actions = actions)
@@ -474,7 +425,14 @@ private fun PlaylistContent(
             playlist = playlist,
             onOpenFilters = { showFilters = true },
             onLayoutToggle = onVodLayoutToggle,
-            actions = actions
+            actions = actions,
+            categories = categories,
+            onOpenCategories = { showCategorySheet = true },
+            onClearCategory = { onVodCategoryChange(null) },
+            showGroupChip = groupPickerAvailable,
+            onOpenGroups = { showGroupSheet = true },
+            onClearGroup = { onGroupChange(null) },
+            chipFocus = pickerChipFocus
         )
 
         state.error?.let { message ->
@@ -524,7 +482,8 @@ private fun PlaylistContent(
                 state = state,
                 onClearFilters = actions.onClearFilters,
                 onAllCategories = { onVodCategoryChange(null) },
-                onClearQuery = actions.onClearQuery
+                onClearQuery = actions.onClearQuery,
+                onAllGroups = { onGroupChange(null) }
             )
 
             posterGrid && state.tab == SourceType.MOVIE -> {
@@ -700,70 +659,6 @@ private fun SeriesCatalogueList(
 }
 
 /**
- * Category row of the list header: provider categories on the Movies/Series
- * tabs of an Xtream list (narrowed by the selected language), the group pills
- * everywhere else. The list/grid toggle lives in the results toolbar.
- */
-@Composable
-private fun FilterRow(
-    state: UiState,
-    onGroupChange: (String?) -> Unit,
-    onVodCategoryChange: (String?) -> Unit
-) {
-    val categories = state.visibleVodCategories
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.weight(1f)) {
-            when {
-                state.isCatalogTab && categories.isNotEmpty() -> CatalogPills(
-                    categories = categories,
-                    selected = state.selectedVodCategory,
-                    onSelect = onVodCategoryChange
-                )
-                // A catalogue tab without provider categories shows no pills at
-                // all: the catalogue branch matches on category id and on the
-                // query, never on the M3U group, so group pills there would be
-                // selectable and do nothing.
-                state.isCatalogTab -> Unit
-                else -> GroupPills(state = state, onGroupChange = onGroupChange)
-            }
-        }
-    }
-}
-
-/** Provider category chips of the Movies/Series tabs (same pill component). */
-@Composable
-private fun CatalogPills(
-    categories: List<VodCategory>,
-    selected: String?,
-    onSelect: (String?) -> Unit
-) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item(key = "all-categories") {
-            GroupPill(
-                label = stringResource(R.string.all_categories),
-                selected = selected == null,
-                onClick = { onSelect(null) }
-            )
-        }
-        items(items = categories, key = { it.id }) { category ->
-            GroupPill(
-                label = category.name,
-                selected = selected == category.id,
-                onClick = {
-                    onSelect(if (selected == category.id) null else category.id)
-                }
-            )
-        }
-    }
-}
-
-/**
  * Resolves one notice message to its text. Every sentence lives in
  * `strings.xml`; this is the only place that knows the mapping, so the notice
  * selection itself stays free of Android and testable.
@@ -827,33 +722,6 @@ private fun NoticeLine(
                 Text(actionLabel)
             }
         }
-    }
-}
-
-@Composable
-private fun RefreshProgress(state: UiState) {
-    val progress = if (state.totalBytes > 0) {
-        (state.progressBytes.toFloat() / state.totalBytes).coerceIn(0f, 1f)
-    } else {
-        null
-    }
-    if (progress != null) {
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    } else {
-        LinearProgressIndicator(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
     }
 }
 
@@ -936,98 +804,6 @@ private fun Pill(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    searchAll: Boolean,
-    onSearchAllChange: (Boolean) -> Unit
-) {
-    val focusManager = LocalFocusManager.current
-
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium,
-        placeholder = {
-            Text(
-                text = stringResource(R.string.search_hint),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        },
-        leadingIcon = {
-            Icon(Icons.Default.Search, contentDescription = null)
-        },
-        trailingIcon = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.clear)
-                        )
-                    }
-                }
-                IconButton(onClick = { onSearchAllChange(!searchAll) }) {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = stringResource(R.string.search_all),
-                        tint = if (searchAll) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            cursorColor = MaterialTheme.colorScheme.primary
-        ),
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() })
-    )
-}
-
-@Composable
-private fun GroupPills(state: UiState, onGroupChange: (String?) -> Unit) {
-    val groups = state.groups.take(12)
-    if (groups.isEmpty()) return
-
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item(key = "all-groups") {
-            GroupPill(
-                label = stringResource(R.string.all_groups),
-                selected = state.selectedGroup == null,
-                onClick = { onGroupChange(null) }
-            )
-        }
-        items(items = groups, key = { it.name }) { group ->
-            GroupPill(
-                label = group.name,
-                selected = state.selectedGroup == group.name,
-                onClick = {
-                    onGroupChange(if (state.selectedGroup == group.name) null else group.name)
-                }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 internal fun GroupPill(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
@@ -1074,7 +850,14 @@ private fun ListHeader(
     playlist: Playlist,
     onOpenFilters: () -> Unit,
     onLayoutToggle: () -> Unit,
-    actions: CatalogActions
+    actions: CatalogActions,
+    categories: List<VodCategory>,
+    onOpenCategories: () -> Unit,
+    onClearCategory: () -> Unit,
+    showGroupChip: Boolean,
+    onOpenGroups: () -> Unit,
+    onClearGroup: () -> Unit,
+    chipFocus: FocusRequester
 ) {
     if (state.isCatalogTab) {
         ResultsToolbar(
@@ -1082,44 +865,70 @@ private fun ListHeader(
             warningCount = playlist.warnings.size,
             onOpenFilters = onOpenFilters,
             onLayoutToggle = onLayoutToggle,
-            actions = actions
+            actions = actions,
+            categories = categories,
+            onOpenCategories = onOpenCategories,
+            onClearCategory = onClearCategory,
+            chipFocus = chipFocus
         )
         return
+    }
+
+    // One row: the group chip on the left, the result count on the right. The
+    // count is an unweighted child, so it is measured first and never truncated;
+    // the chip is what shrinks.
+    val displayed = formatNumber(state.displayedCount)
+    val narrowed = state.selectedGroup != null || state.query.isNotBlank()
+    val total = formatNumber(state.tabCount(if (state.searchAll) null else state.tab))
+    val countText = stringResource(
+        if (narrowed) R.string.channels_count_of else R.string.channels_count,
+        *(if (narrowed) arrayOf<Any>(displayed, total) else arrayOf<Any>(displayed))
+    )
+    val warnings = playlist.warnings.size
+    val errorColor = MaterialTheme.colorScheme.error
+    val warningText = if (warnings > 0) pluralStringResource(R.plurals.warning_count, warnings, warnings) else null
+    val separator = stringResource(R.string.meta_separator)
+    val annotated = buildAnnotatedString {
+        append(countText)
+        if (warningText != null) {
+            append(separator)
+            withStyle(SpanStyle(color = errorColor)) { append(warningText) }
+        }
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp),
+            .padding(start = 16.dp, end = 20.dp)
+            .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stringResource(
-                if (state.isCatalogTab) R.string.items_count else R.string.channels_count,
-                formatNumber(state.displayedCount)
-            ),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.weight(1f))
-        if (playlist.warnings.isNotEmpty()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = stringResource(
-                        R.string.warning_count,
-                        playlist.warnings.size
+        Box(Modifier.weight(1f)) {
+            if (showGroupChip) {
+                val group = state.selectedGroup
+                PickerChipWithClear(
+                    label = group ?: stringResource(R.string.group_chip, stringResource(R.string.all_groups)),
+                    selected = group != null,
+                    chipDescription = stringResource(
+                        R.string.group_chip_cd,
+                        group ?: stringResource(R.string.all_groups)
                     ),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
+                    clearDescription = group?.let { stringResource(R.string.group_clear_cd, it) },
+                    minWidth = 96.dp,
+                    maxWidth = 240.dp,
+                    onOpen = onOpenGroups,
+                    onClear = onClearGroup,
+                    focusRequester = chipFocus
                 )
             }
         }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = annotated,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.End,
+            maxLines = 2
+        )
     }
 }
 
@@ -1166,7 +975,8 @@ private fun EmptyState(
     state: UiState,
     onClearFilters: () -> Unit,
     onAllCategories: () -> Unit,
-    onClearQuery: () -> Unit
+    onClearQuery: () -> Unit,
+    onAllGroups: () -> Unit
 ) {
     // On a catalogue tab every empty result offers the way out that peels off
     // one layer of constraint at a time: filters, then category, then query.
@@ -1188,7 +998,9 @@ private fun EmptyState(
         state.playlist == null -> null
         hasFilters -> stringResource(R.string.filters_clear) to onClearFilters
         hasCategory -> stringResource(R.string.empty_category_action) to onAllCategories
-        catalog && hasQuery -> stringResource(R.string.clear_search) to onClearQuery
+        !catalog && state.selectedGroup != null ->
+            stringResource(R.string.empty_group_action) to onAllGroups
+        hasQuery -> stringResource(R.string.clear_search) to onClearQuery
         else -> null
     }
 

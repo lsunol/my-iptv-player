@@ -1,5 +1,18 @@
 package dev.lluissunol.iptv.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import dev.lluissunol.iptv.R
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
@@ -103,7 +116,8 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
             )
             state.screen == Screen.LISTS -> ListsScreen(
                 state = state,
-                onOpenList = viewModel::openList,
+                onOpenList = viewModel::onListRowClicked,
+                onBack = viewModel::returnToActiveList,
                 onAddList = viewModel::startAddList,
                 onEditList = viewModel::editList,
                 onDeleteList = viewModel::deleteList,
@@ -116,16 +130,19 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
                 onFormPasswordChange = viewModel::setFormPassword,
                 onFormSubmit = viewModel::submitForm
             )
+            state.screen == Screen.STARTING -> StartingScreen()
             else -> PlaylistScreen(
                 state = state,
                 vodGridState = vodGridState,
                 vodListState = vodListState,
                 scrollVersions = scrollVersions,
                 actions = actions,
-                onBackToLists = viewModel::backToLists,
+                onShowLists = viewModel::showLists,
                 onRefresh = viewModel::refresh,
                 onRetry = viewModel::retry,
                 onQueryChange = viewModel::setQuery,
+                onOpenSearch = viewModel::openSearch,
+                onCloseSearch = viewModel::closeSearch,
                 onTabChange = viewModel::setTab,
                 onSearchAllChange = viewModel::setSearchAll,
                 onGroupChange = viewModel::setGroup,
@@ -140,5 +157,24 @@ fun OpenTvApp(viewModel: PlaylistViewModel = viewModel()) {
                 onClearError = viewModel::clearError
             )
         }
+    }
+}
+
+/** Neutral launch state while the saved lists are read (typically < 100 ms). */
+@Composable
+private fun StartingScreen() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(R.drawable.logo_mark),
+            contentDescription = null,
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(20.dp))
+        )
     }
 }

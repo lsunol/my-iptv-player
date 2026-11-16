@@ -60,7 +60,12 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 /** Top-level destination: the list manager or one loaded playlist. */
-enum class Screen { LISTS, PLAYLIST }
+enum class Screen {
+    /** Neutral launch state while the saved lists are read; never a destination. */
+    STARTING,
+    LISTS,
+    PLAYLIST
+}
 
 /** One list kept in memory: its parsed channels and (for Xtream) its catalogue. */
 private data class LoadedInMemoryList(
@@ -98,7 +103,7 @@ data class ListFormState(
 }
 
 data class UiState(
-    val screen: Screen = Screen.LISTS,
+    val screen: Screen = Screen.STARTING,
     val lists: List<PlaylistConfig> = emptyList(),
     val activeListId: String? = null,
     val form: ListFormState? = null,
@@ -125,6 +130,8 @@ data class UiState(
     /** Selected `player_api.php` category id on the Movies/Series tabs. */
     val selectedVodCategory: String? = null,
     val query: String = "",
+    /** The top bar is a search field. Not persisted; see [searchMode]. */
+    val searchActive: Boolean = false,
     val tab: SourceType? = SourceType.LIVE,
     val searchAll: Boolean = false,
     val selectedGroup: String? = null,
@@ -252,6 +259,8 @@ data class UiState(
     val counts: Map<SourceType, Int> get() = playlist?.counts ?: emptyMap()
     val groups: List<GroupCount>
         get() = playlist?.groupsFor(if (searchAll) null else tab).orEmpty()
+    /** Search sticks while a query is typed, so a filtered list is always explained. */
+    val searchMode: Boolean get() = searchActive || query.isNotEmpty()
     val activeList: PlaylistConfig?
         get() = lists.firstOrNull { it.id == activeListId }
 
@@ -460,14 +469,18 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }.getOrNull()
 
             val lists = loaded?.first.orEmpty()
+            // Cold start opens the active list straight away (cache first, no
+            // network); with no lists the add-list form is the screen.
+            val target = startupListId(lists, loaded?.second)
             _state.update {
                 it.copy(
-                    screen = Screen.LISTS,
+                    screen = if (target != null) Screen.STARTING else Screen.LISTS,
                     lists = lists,
                     activeListId = loaded?.second,
                     form = if (lists.isEmpty()) ListFormState() else null
                 )
             }
+            if (target != null) openList(target)
         }
     }
 
@@ -518,6 +531,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 seriesError = null,
                 selectedSeason = null,
                 query = "",
+                searchActive = false,
                 selectedGroup = null,
                 selectedVodCategory = null,
                 tab = SourceType.LIVE,
@@ -543,27 +557,40 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun backToLists() {
-        loadJob?.cancel()
-        seriesJob?.cancel()
-        movieJob?.cancel()
-        _state.update {
-            it.copy(
-                screen = Screen.LISTS,
-                form = null,
-                error = null,
-                controlsReset = false,
-                selectedMovie = null,
-                movieInfo = null,
-                movieInfoLoading = false,
-                movieInfoError = null,
-                selectedSeries = null,
-                seriesInfo = null,
-                seriesLoading = false,
-                seriesError = null,
-                selectedSeason = null
-            )
+    /**
+     * Opens the lists screen from the playlist header. It touches nothing else:
+     * a refresh keeps running and the tab, query, group and scroll survive.
+     */
+    fun showLists() {
+        _state.update { it.copy(screen = Screen.LISTS, form = null) }
+    }
+
+    /** Back from the lists screen: the active list as it was, or opened from its cache. */
+    fun returnToActiveList() {
+        val current = _state.value
+        val activeId = current.activeListId ?: return
+        // An unopenable (invalid-URL) active list would bounce to its form: stay put.
+        if (!canReturnToActiveList(current.activeList)) return
+        if (canResumeActiveList(current.playlist != null, current.isLoading)) {
+            _state.update { it.copy(screen = Screen.PLAYLIST, form = null) }
+        } else {
+            openList(activeId)
         }
+    }
+
+    /** A row of the lists screen: the active one resumes, any other opens. */
+    fun onListRowClicked(listId: String) {
+        if (listId == _state.value.activeListId) returnToActiveList() else openList(listId)
+    }
+
+    fun openSearch() {
+        _state.update { it.copy(searchActive = true) }
+    }
+
+    /** Closing search clears the query and "search all", so no hidden filter stays on. */
+    fun closeSearch() {
+        _state.update { it.copy(searchActive = false, query = "", searchAll = false) }
+        scheduleFilter(debounce = false)
     }
 
     fun startAddList() {
@@ -572,8 +599,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
     fun editList(listId: String, error: ListFormError? = null) {
         val list = _state.value.lists.firstOrNull { it.id == listId } ?: return
-        val returnTo = _state.value.screen
-        loadJob?.cancel()
+        val returnTo = formReturnScreen(_state.value.screen)
         _state.update {
             it.copy(
                 screen = Screen.LISTS,
@@ -590,6 +616,19 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 )
             )
         }
+    }
+
+    /**
+     * Stops every load tied to the active list and waits for it to end, then
+     * clears the busy flags a cancelled load never resets itself. Callers run
+     * this BEFORE touching caches or the in-memory copy, so a late finisher
+     * cannot write them back.
+     */
+    private suspend fun cancelActiveListWork() {
+        val jobs = listOfNotNull(loadJob, seriesJob, movieJob)
+        jobs.forEach { it.cancel() }
+        jobs.forEach { it.join() }
+        _state.update { it.copy(isLoading = false, isReadingCache = false) }
     }
 
     fun editActiveList() {
@@ -670,6 +709,9 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val previous = _state.value.lists.firstOrNull { it.id == candidate.id }
             val urlChanged = previous == null || previous.effectiveUrl != candidate.effectiveUrl
+            val editedIsActive = previous != null && _state.value.activeListId == previous.id
+            val cancelled = mustCancelLoadsOnEdit(editedIsActive, urlChanged)
+            if (cancelled) cancelActiveListWork()
             // Only new lists, or an edited list that was open and changed its URL,
             // should become the active list; a mere rename must not switch to it.
             // [form.returnTo] is where the form was opened from, which is what
@@ -696,6 +738,12 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             }
 
             runCatching { settings.upsertList(saved) }
+            if (cancelled && !willOpen) {
+                // Edited from the lists screen: the in-memory channels belong to the
+                // old URL. Drop them so Back reopens the list from its new URL.
+                loadedSeriesInfo.clear()
+                _state.update { it.copy(playlist = null, filteredChannels = emptyList()) }
+            }
             if (willOpen) {
                 runCatching { settings.setActiveList(saved.id) }
             }
@@ -719,16 +767,17 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
 
     fun deleteList(listId: String) {
         viewModelScope.launch {
+            // Decide first, and stop the running load BEFORE deleting caches: a
+            // finishing load would otherwise recreate playlist-<id>.cache /
+            // xtream-<id>.json (which hold credentials) for the deleted list.
+            val wasActive = _state.value.activeListId == listId
+            if (wasActive) cancelActiveListWork()
             loadedPlaylists.remove(listId)
             runCatching { cache.delete(listId) }
             runCatching { xtreamCache.delete(listId) }
             repository.forget(listId)
             runCatching { settings.deleteList(listId) }
             val lists = runCatching { settings.lists.first() }.getOrDefault(emptyList())
-            val wasActive = _state.value.activeListId == listId
-            if (wasActive) loadJob?.cancel()
-            if (wasActive) seriesJob?.cancel()
-            if (wasActive) movieJob?.cancel()
             if (wasActive) loadedSeriesInfo.clear()
             _state.update { current ->
                 current.copy(
@@ -737,6 +786,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     screen = if (wasActive) Screen.LISTS else current.screen,
                     form = if (lists.isEmpty()) ListFormState() else null,
                     playlist = if (wasActive) null else current.playlist,
+                    isLoading = if (wasActive) false else current.isLoading,
+                    isReadingCache = if (wasActive) false else current.isReadingCache,
                     filteredChannels = if (wasActive) emptyList() else current.filteredChannels,
                     selectedSeries = if (wasActive) null else current.selectedSeries,
                     selectedMovie = if (wasActive) null else current.selectedMovie,
@@ -1557,13 +1608,6 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         playlist.count(SourceType.MOVIE) > 0 -> SourceType.MOVIE
         playlist.count(SourceType.SERIES) > 0 -> SourceType.SERIES
         else -> null
-    }
-
-    private fun isHttpUrl(value: String): Boolean {
-        val trimmed = value.trim()
-        val hasScheme = trimmed.startsWith("http://", ignoreCase = true) ||
-            trimmed.startsWith("https://", ignoreCase = true)
-        return hasScheme && trimmed.substringAfter("://").substringBefore('/').isNotBlank()
     }
 
     override fun onCleared() {
