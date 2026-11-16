@@ -133,6 +133,36 @@ SDK="$LOCALAPPDATA/Android/Sdk"
 "$SDK/emulator/emulator.exe" -avd opentv36
 ```
 
+## Send to the phone (release) — standing rule
+
+When the owner says "mándalo al móvil" / "send it to the phone" (any wording),
+**the default is the release build**, not debug. Recorded 2026-11-16.
+
+Why: the phone has the release-signed app installed. A debug APK carries a
+different signature, so `adb install -r` fails with
+`INSTALL_FAILED_UPDATE_INCOMPATIBLE` and the only way around it is uninstalling,
+which would erase the user's lists and favourites. The release APK keeps them.
+The emulator uses the debug build; the phone does not.
+
+```bash
+# 1. Which device is the phone? (two devices may be attached: pick by serial)
+adb devices -l                     # the phone is not "emulator-xxxx"
+# 2. Build the release APK (needs signing/keystore.properties, git-ignored)
+./gradlew :app:assembleRelease
+# 3. Check the certificate matches the installed one BEFORE installing
+BT="$LOCALAPPDATA/Android/Sdk/build-tools/36.0.0"
+"$BT/apksigner.bat" verify --print-certs app/build/outputs/apk/release/app-release.apk | grep SHA-256
+adb -s <phone> shell pm path dev.lluissunol.iptv        # then `adb pull` it and run apksigner on it
+# 4. Install over the existing app (never uninstall) and launch
+adb -s <phone> install -r app/build/outputs/apk/release/app-release.apk
+adb -s <phone> shell am start -n dev.lluissunol.iptv/.MainActivity
+adb -s <phone> logcat -d | grep -c "FATAL EXCEPTION"    # expect 0
+```
+
+Rules: do not change `versionCode`/`versionName` unless asked (tell the owner
+when a publish would need a bump); never print `signing/keystore.properties`;
+never uninstall on the phone; report the APK SHA-256 and the result.
+
 ## Release signing (only with user approval)
 
 Generate a keystore **outside** the repository or in `signing/` (git-ignored):

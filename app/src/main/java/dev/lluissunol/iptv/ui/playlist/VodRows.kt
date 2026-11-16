@@ -25,9 +25,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.lluissunol.iptv.R
+import dev.lluissunol.iptv.data.GenreLabel
 import dev.lluissunol.iptv.data.model.Episode
 import dev.lluissunol.iptv.data.model.SeriesCard
 import dev.lluissunol.iptv.data.model.VodItem
+import dev.lluissunol.iptv.data.releaseYear
+import dev.lluissunol.iptv.ui.formatRating10
+import dev.lluissunol.iptv.ui.shortDay
 
 /**
  * List layout of the catalogue tabs, used when the user switches the Movies or
@@ -114,6 +118,32 @@ private fun VodRow(
     }
 }
 
+/**
+ * The facts a list row can show about a title, in priority order: rating, year,
+ * genres, then what is specific to the type. Every part is omitted when the
+ * provider did not send it, so a panel with little data simply gets a shorter
+ * line; [fallback] stands in when there is nothing at all.
+ */
+@Composable
+private fun factsLine(
+    rating: Double,
+    releaseKey: Int,
+    genres: List<GenreLabel>,
+    extra: String?,
+    fallback: String
+): String {
+    val parts = ArrayList<String>(4)
+    if (rating > 0.0) parts += stringResource(R.string.rating_short, formatRating10(rating))
+    if (releaseKey > 0) parts += releaseYear(releaseKey).toString()
+    if (genres.isNotEmpty()) {
+        val labels = ArrayList<String>(2)
+        for (genre in genres.take(2)) labels += genreLabel(genre)
+        parts += labels.joinToString(", ")
+    }
+    if (extra != null) parts += extra
+    return if (parts.isEmpty()) fallback else parts.joinToString(" · ")
+}
+
 /** One movie of the catalogue, in list layout. */
 @Composable
 internal fun MovieRow(
@@ -124,12 +154,27 @@ internal fun MovieRow(
     /** Long-press opens the movie detail; null (favourites) keeps a plain tap target. */
     onOpenDetails: ((VodItem) -> Unit)? = null,
     playLabel: String? = null,
-    detailsLabel: String? = null
+    detailsLabel: String? = null,
+    /** Labels of the catalogue's genre table, resolved once by the list. */
+    genreLabels: List<List<GenreLabel>> = emptyList(),
+    /** The date a title was added is only worth a line while sorting by it. */
+    showAdded: Boolean = false
 ) {
+    val added = if (showAdded && item.added > 0L) {
+        stringResource(R.string.added_on, shortDay(item.added * 1000L))
+    } else {
+        null
+    }
     VodRow(
         posterUrl = item.posterUrl,
         title = item.name,
-        subtitle = stringResource(R.string.tab_movies),
+        subtitle = factsLine(
+            rating = item.rating,
+            releaseKey = item.releaseKey,
+            genres = genreLabels.getOrNull(item.genreRef).orEmpty(),
+            extra = added,
+            fallback = stringResource(R.string.tab_movies)
+        ),
         qualityTag = item.qualityTag,
         isFavorite = isFavorite,
         onClick = { onPlay(item) },
@@ -146,12 +191,24 @@ internal fun SeriesRow(
     card: SeriesCard,
     isFavorite: Boolean,
     onOpen: (SeriesCard) -> Unit,
-    onToggleFavorite: (SeriesCard) -> Unit
+    onToggleFavorite: (SeriesCard) -> Unit,
+    genreLabels: List<List<GenreLabel>> = emptyList()
 ) {
+    val runtime = if (card.runtimeMin > 0) {
+        stringResource(R.string.duration_minutes, card.runtimeMin)
+    } else {
+        null
+    }
     VodRow(
         posterUrl = card.posterUrl,
         title = card.name,
-        subtitle = stringResource(R.string.tab_series),
+        subtitle = factsLine(
+            rating = card.rating,
+            releaseKey = card.releaseKey,
+            genres = genreLabels.getOrNull(card.genreRef).orEmpty(),
+            extra = runtime,
+            fallback = stringResource(R.string.tab_series)
+        ),
         qualityTag = card.qualityTag,
         isFavorite = isFavorite,
         onClick = { onOpen(card) },

@@ -237,6 +237,79 @@ class CatalogIndexTest {
         assertEquals(listOf("10 Cosas", "Apple", "Árbol", "!!Banana", "| ES | Zebra"), sorted.map { it.name })
     }
 
+    // -------------------------------------------------------- reversed order
+
+    @Test
+    fun reversedRatingRunsLowestFirstAndKeepsUnknownsLast() {
+        val movies = listOf(5.0, 0.0, 9.0, 5.0, 0.0, 9.0).mapIndexed { i, r -> movie(i + 1, rating = r) }
+        val catalog = catalogOf(movies)
+        val index = buildCatalogIndex(catalog)
+        val forward = filterCatalog(catalog.movies, index.movies, CatalogSort.RATING, null, "", null, null, false)
+        val reversed = filterCatalog(
+            catalog.movies, index.movies, CatalogSort.RATING, null, "", null, null, false, reversed = true
+        )
+        assertEquals(listOf(3L, 6L, 1L, 4L, 2L, 5L), forward.map { it.streamId })
+        // Exact reverse of the four rated titles (lowest first, ties backwards too);
+        // the two unknowns (2, 5) stay at the end.
+        assertEquals(listOf(4L, 1L, 6L, 3L, 2L, 5L), reversed.map { it.streamId })
+    }
+
+    @Test
+    fun reversedRecentRunsOldestFirst() {
+        val day = 86_400L
+        val movies = listOf(0L, 5 * day, 9 * day, 7 * day)
+            .mapIndexed { i, added -> movie(i + 1, added = if (added == 0L) 0L else added + 1_600_000_000L) }
+        val catalog = catalogOf(movies)
+        val index = buildCatalogIndex(catalog)
+        val reversed = filterCatalog(
+            catalog.movies, index.movies, CatalogSort.RECENT, null, "", null, null, false, reversed = true
+        )
+        assertEquals(listOf(2L, 4L, 3L, 1L), reversed.map { it.streamId })
+    }
+
+    @Test
+    fun reversedAzRunsZToAWithTitlesWithoutLettersStillLast() {
+        val names = listOf("Apple", "!!!", "Zebra", "Mango")
+        val movies = names.mapIndexed { i, n -> movie(i + 1, name = n) }
+        val catalog = catalogOf(movies)
+        val index = buildCatalogIndex(catalog)
+        val reversed = filterCatalog(
+            catalog.movies, index.movies, CatalogSort.AZ, null, "", null, null, false, reversed = true
+        )
+        assertEquals(listOf("Zebra", "Mango", "Apple", "!!!"), reversed.map { it.name })
+    }
+
+    @Test
+    fun reversedCombinesWithFiltersAndNeverLosesTitles() {
+        val catalog = PanelFixtures.catalog(Variant.MEASURED)
+        val index = buildCatalogIndex(catalog)
+        val forward = filterCatalog(catalog.movies, index.movies, CatalogSort.RATING, null, "", null, null, true)
+        val reversed = filterCatalog(
+            catalog.movies, index.movies, CatalogSort.RATING, null, "", null, null, true, reversed = true
+        )
+        assertEquals(forward.map { it.streamId }.toSet(), reversed.map { it.streamId }.toSet())
+        assertEquals(forward.size, reversed.size)
+        // Reversing the direction of the provider order is a no-op (it has none).
+        val provider = filterCatalog(
+            catalog.movies, index.movies, CatalogSort.PROVIDER, null, "", null, null, false, reversed = true
+        )
+        assertEquals(catalog.movies, provider)
+    }
+
+    @Test
+    fun storedNamesRoundTripTheDirection() {
+        assertEquals("RATING", CatalogSort.storedName(CatalogSort.RATING, false))
+        assertEquals("RATING:REV", CatalogSort.storedName(CatalogSort.RATING, true))
+        assertEquals("PROVIDER", CatalogSort.storedName(CatalogSort.PROVIDER, true))
+        assertEquals(CatalogSort.RATING, CatalogSort.fromName("RATING:REV"))
+        assertEquals(CatalogSort.AZ, CatalogSort.fromName("AZ"))
+        assertTrue(CatalogSort.isReversedName("AZ:REV"))
+        assertFalse(CatalogSort.isReversedName("AZ"))
+        assertNull(CatalogSort.fromName("NOPE:REV"))
+        assertFalse(CatalogSort.RATING.naturallyAscending)
+        assertTrue(CatalogSort.AZ.naturallyAscending)
+    }
+
     @Test
     fun providerOrderIsTheCatalogueOrder() {
         val catalog = PanelFixtures.catalog(Variant.MEASURED)

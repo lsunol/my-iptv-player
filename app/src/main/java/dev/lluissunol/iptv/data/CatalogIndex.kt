@@ -20,8 +20,32 @@ interface CatalogEntry {
 enum class CatalogSort {
     PROVIDER, RECENT, RELEASE, RATING, AZ;
 
+    /**
+     * True when the natural direction of this sort runs from the smallest to the
+     * largest value (A-Z). Ratings and dates run best/newest first, so they
+     * are "descending" by default.
+     */
+    val naturallyAscending: Boolean get() = this == AZ
+
     companion object {
-        fun fromName(name: String?): CatalogSort? = entries.firstOrNull { it.name == name }
+        /** Suffix of a stored name whose direction is reversed (`RATING:REV`). */
+        private const val REVERSED_SUFFIX = ":REV"
+
+        /** Parses a stored name, with or without the reversed suffix. */
+        fun fromName(name: String?): CatalogSort? {
+            val base = name?.removeSuffix(REVERSED_SUFFIX)
+            return entries.firstOrNull { it.name == base }
+        }
+
+        /** True when [name] carries the reversed suffix. */
+        fun isReversedName(name: String?): Boolean = name?.endsWith(REVERSED_SUFFIX) == true
+
+        /**
+         * The string saved for [sort]: its name, plus the reversed suffix. The
+         * provider order has no direction, so it never carries one.
+         */
+        fun storedName(sort: CatalogSort, reversed: Boolean): String =
+            if (reversed && sort != PROVIDER) sort.name + REVERSED_SUFFIX else sort.name
     }
 }
 
@@ -69,7 +93,12 @@ class TabIndex(
     val ratingFilter: Boolean,
     /** True when at least one of the three filters is unavailable. */
     val filtersHidden: Boolean,
-    internal val permutations: Map<CatalogSort, IntArray>
+    internal val permutations: Map<CatalogSort, IntArray>,
+    /**
+     * Per sort: how many titles at the front of its permutation carry a value.
+     * The rest (unknown) always stay last, also when the direction is reversed.
+     */
+    internal val knownCounts: Map<CatalogSort, Int> = emptyMap()
 ) {
     val hasFilters: Boolean get() = language != null || genres != null || ratingFilter
 }
@@ -151,21 +180,27 @@ private fun buildTabIndex(
     val sorts = ArrayList<CatalogSort>(5)
     sorts += CatalogSort.PROVIDER
     val permutations = HashMap<CatalogSort, IntArray>()
+    val knownCounts = HashMap<CatalogSort, Int>()
     if (n >= 2) {
         if (recentOk) {
             sorts += CatalogSort.RECENT
             permutations[CatalogSort.RECENT] = descendingPermutation(n) { addedOf!!(it) }
+            knownCounts[CatalogSort.RECENT] = (0 until n).count { addedOf!!(it) > 0L }
         }
         if (releaseOk) {
             sorts += CatalogSort.RELEASE
             permutations[CatalogSort.RELEASE] = descendingPermutation(n) { entries[it].releaseKey.toLong() }
+            knownCounts[CatalogSort.RELEASE] = entries.count { it.releaseKey > 0 }
         }
         if (ratingOk) {
             sorts += CatalogSort.RATING
             permutations[CatalogSort.RATING] = descendingPermutation(n) { ratingValue(entries[it].rating) }
+            knownCounts[CatalogSort.RATING] = entries.count { ratingValue(it.rating) > 0L }
         }
         sorts += CatalogSort.AZ
         permutations[CatalogSort.AZ] = alphabeticalPermutation(entries)
+        // Titles without any letter sort last in A-Z and stay last when reversed.
+        knownCounts[CatalogSort.AZ] = entries.count { alphabeticalGroup(alphabeticalKey(it.name)) < 2 }
     }
     val sortsHidden = n >= 2 && ((isMovies && !recentOk) || !releaseOk || !ratingOk)
 
@@ -180,7 +215,8 @@ private fun buildTabIndex(
         genres = genres,
         ratingFilter = ratingFilter,
         filtersHidden = n >= 2 && (language == null || genres == null || !ratingFilter),
-        permutations = permutations
+        permutations = permutations,
+        knownCounts = knownCounts
     )
 }
 
@@ -325,13 +361,18 @@ fun <T : CatalogEntry> filterCatalog(
     normalizedQuery: String,
     language: LanguageOption?,
     genreKey: String?,
-    minRating7: Boolean
+    minRating7: Boolean,
+    /** Flips the direction of [sort]; titles with no value stay last. */
+    reversed: Boolean = false
 ): List<T> {
     val order = if (sort != CatalogSort.PROVIDER && index != null && index.size == items.size) {
         index.permutations[sort]
     } else {
         null
     }
+    // Reversed: the titles that carry a value run backwards, the unknown tail
+    // keeps its place.
+    val known = if (order != null && reversed) index?.knownCounts?.get(sort) ?: 0 else 0
     val byCategory = if (language != null) index?.language?.byCategory else null
     val genreMatches = if (genreKey != null) index?.genres?.refMatches(genreKey) else null
     val ratingOn = minRating7 && index?.ratingFilter == true
@@ -339,7 +380,8 @@ fun <T : CatalogEntry> filterCatalog(
 
     val out = ArrayList<T>()
     for (position in items.indices) {
-        val item = items[if (order != null) order[position] else position]
+        val at = if (position < known) known - 1 - position else position
+        val item = items[if (order != null) order[at] else position]
         if (categoryId != null && item.categoryId != categoryId) continue
         if (normalizedQuery.isNotEmpty() && !item.searchKey.contains(normalizedQuery)) continue
         if (applyLanguage && (byCategory!![item.categoryId] ?: LanguageOption.OTHER) != language) continue
@@ -366,7 +408,9 @@ data class Reconciled(
     val seriesSort: CatalogSort,
     val language: LanguageOption?,
     val resetHappened: Boolean,
-    val writeBack: Boolean
+    val writeBack: Boolean,
+    val movieReversed: Boolean = false,
+    val seriesReversed: Boolean = false
 )
 
 /**
@@ -386,7 +430,11 @@ fun reconcileControls(stored: StoredControls, index: CatalogIndex): Reconciled {
         seriesSort = seriesSort ?: CatalogSort.PROVIDER,
         language = language,
         resetHappened = false,
-        writeBack = false
+        writeBack = false,
+        movieReversed = movieSort != null && movieSort != CatalogSort.PROVIDER &&
+            CatalogSort.isReversedName(stored.movieSort),
+        seriesReversed = seriesSort != null && seriesSort != CatalogSort.PROVIDER &&
+            CatalogSort.isReversedName(stored.seriesSort)
     )
     if (index.outdated) return applied
 

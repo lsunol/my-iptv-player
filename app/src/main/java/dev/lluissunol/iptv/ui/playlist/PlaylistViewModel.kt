@@ -159,6 +159,9 @@ data class UiState(
     val catalogIndex: CatalogIndex? = null,
     val movieSort: CatalogSort = CatalogSort.PROVIDER,
     val seriesSort: CatalogSort = CatalogSort.PROVIDER,
+    /** The tab's sort runs against its natural direction (a second tap on it). */
+    val movieSortReversed: Boolean = false,
+    val seriesSortReversed: Boolean = false,
     /** Saved language preference of the active list (applies where detected). */
     val catalogLanguage: LanguageOption? = null,
     /** Selected genre option key of the current tab (`c:ACTION`, `o:<fold>`). */
@@ -194,6 +197,13 @@ data class UiState(
             SourceType.MOVIE -> movieSort
             SourceType.SERIES -> seriesSort
             else -> CatalogSort.PROVIDER
+        }
+
+    val currentSortReversed: Boolean
+        get() = when (tab) {
+            SourceType.MOVIE -> movieSortReversed
+            SourceType.SERIES -> seriesSortReversed
+            else -> false
         }
 
     /** The saved language, only when this tab's catalogue actually offers it. */
@@ -303,6 +313,7 @@ private class FilterInput(
     val categoryId: String?,
     val searchAll: Boolean,
     val sort: CatalogSort,
+    val sortReversed: Boolean,
     val language: LanguageOption?,
     val genre: String?,
     val minRating7: Boolean
@@ -311,7 +322,7 @@ private class FilterInput(
         playlist === other.playlist && catalog === other.catalog && index === other.index &&
             query == other.query && tab == other.tab && group == other.group &&
             categoryId == other.categoryId && searchAll == other.searchAll &&
-            sort == other.sort && language == other.language && genre == other.genre &&
+            sort == other.sort && sortReversed == other.sortReversed && language == other.language && genre == other.genre &&
             minRating7 == other.minRating7
 }
 
@@ -325,6 +336,7 @@ private fun UiState.toFilterInput() = FilterInput(
     categoryId = selectedVodCategory,
     searchAll = searchAll,
     sort = currentSort,
+    sortReversed = currentSortReversed,
     language = effectiveLanguage,
     genre = effectiveGenre,
     minRating7 = effectiveMinRating
@@ -334,13 +346,14 @@ private fun UiState.toFilterInput() = FilterInput(
 private data class ViewSignature(
     val tab: SourceType?,
     val sort: CatalogSort,
+    val sortReversed: Boolean,
     val language: LanguageOption?,
     val genre: String?,
     val minRating7: Boolean,
     val category: String?
 )
 
-private fun FilterInput.signature() = ViewSignature(tab, sort, language, genre, minRating7, categoryId)
+private fun FilterInput.signature() = ViewSignature(tab, sort, sortReversed, language, genre, minRating7, categoryId)
 
 class PlaylistViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as OpenTvApplication
@@ -485,6 +498,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 catalogIndex = null,
                 movieSort = CatalogSort.PROVIDER,
                 seriesSort = CatalogSort.PROVIDER,
+                movieSortReversed = false,
+                seriesSortReversed = false,
                 catalogLanguage = null,
                 genreFilter = null,
                 minRating7 = false,
@@ -786,22 +801,32 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         scheduleFilter(debounce = false)
     }
 
-    /** Orders the current Movies/Series tab; only an available order is accepted. */
+    /**
+     * Orders the current Movies/Series tab; only an available order is accepted.
+     * Choosing the order that is already active flips its direction (the
+     * provider order has none, so there it does nothing).
+     */
     fun setSort(sort: CatalogSort) {
         val current = _state.value
         val tab = current.tab
         if (tab != SourceType.MOVIE && tab != SourceType.SERIES) return
         if (current.tabIndex?.sorts?.contains(sort) != true) return
         val listId = current.activeListId ?: return
+        val sameSort = sort == current.currentSort
+        if (sameSort && sort == CatalogSort.PROVIDER) return
+        val reversed = sameSort && !current.currentSortReversed
         _state.update {
-            if (tab == SourceType.MOVIE) it.copy(movieSort = sort, controlsReset = false)
-            else it.copy(seriesSort = sort, controlsReset = false)
+            if (tab == SourceType.MOVIE) {
+                it.copy(movieSort = sort, movieSortReversed = reversed, controlsReset = false)
+            } else {
+                it.copy(seriesSort = sort, seriesSortReversed = reversed, controlsReset = false)
+            }
         }
         scheduleFilter(debounce = false)
         viewModelScope.launch {
             runCatching {
                 settings.setCatalogSort(
-                    listId, tab, sort.takeIf { it != CatalogSort.PROVIDER }?.name
+                    listId, tab, CatalogSort.storedName(sort, reversed).takeIf { sort != CatalogSort.PROVIDER }
                 )
             }
         }
@@ -1306,6 +1331,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         // never be wiped by mistake.
         var movieSort = CatalogSort.PROVIDER
         var seriesSort = CatalogSort.PROVIDER
+        var movieReversed = false
+        var seriesReversed = false
         var language: LanguageOption? = null
         var controlsReset = false
         val before = _state.value
@@ -1316,7 +1343,11 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
         if (index != null) {
             val stored = runCatching {
                 if (refreshing) {
-                    StoredControls(before.movieSort.name, before.seriesSort.name, before.catalogLanguage?.id)
+                    StoredControls(
+                        CatalogSort.storedName(before.movieSort, before.movieSortReversed),
+                        CatalogSort.storedName(before.seriesSort, before.seriesSortReversed),
+                        before.catalogLanguage?.id
+                    )
                 } else {
                     StoredControls(
                         settings.catalogSort(list.id, SourceType.MOVIE),
@@ -1329,15 +1360,19 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 val reconciled = reconcileControls(stored, index)
                 movieSort = reconciled.movieSort
                 seriesSort = reconciled.seriesSort
+                movieReversed = reconciled.movieReversed
+                seriesReversed = reconciled.seriesReversed
                 language = reconciled.language
                 controlsReset = reconciled.resetHappened
                 if (reconciled.writeBack) {
                     viewModelScope.launch {
                         runCatching {
                             settings.setCatalogSort(list.id, SourceType.MOVIE,
-                                movieSort.takeIf { it != CatalogSort.PROVIDER }?.name)
+                                CatalogSort.storedName(movieSort, movieReversed)
+                                    .takeIf { movieSort != CatalogSort.PROVIDER })
                             settings.setCatalogSort(list.id, SourceType.SERIES,
-                                seriesSort.takeIf { it != CatalogSort.PROVIDER }?.name)
+                                CatalogSort.storedName(seriesSort, seriesReversed)
+                                    .takeIf { seriesSort != CatalogSort.PROVIDER })
                             settings.setCatalogLanguage(list.id, language?.id)
                         }
                     }
@@ -1373,6 +1408,11 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                 SourceType.SERIES -> seriesSort
                 else -> CatalogSort.PROVIDER
             },
+            sortReversed = when (tab) {
+                SourceType.MOVIE -> movieReversed
+                SourceType.SERIES -> seriesReversed
+                else -> false
+            },
             language = tabIndex.validLanguage(language),
             genre = genre,
             minRating7 = ratingOn
@@ -1395,6 +1435,8 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     catalogIndex = index,
                     movieSort = movieSort,
                     seriesSort = seriesSort,
+                    movieSortReversed = movieReversed,
+                    seriesSortReversed = seriesReversed,
                     catalogLanguage = language,
                     controlsReset = controlsReset,
                     catalogViewVersion = current.catalogViewVersion + if (bumpView) 1 else 0,
@@ -1483,7 +1525,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             val movies = if (tab == SourceType.MOVIE) {
                 filterCatalog(
                     catalog.movies, input.index?.movies, input.sort, input.categoryId,
-                    normalized, input.language, input.genre, input.minRating7
+                    normalized, input.language, input.genre, input.minRating7, input.sortReversed
                 )
             } else {
                 emptyList()
@@ -1491,7 +1533,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             val series = if (tab == SourceType.SERIES) {
                 filterCatalog(
                     catalog.series, input.index?.series, input.sort, input.categoryId,
-                    normalized, input.language, input.genre, input.minRating7
+                    normalized, input.language, input.genre, input.minRating7, input.sortReversed
                 )
             } else {
                 emptyList()

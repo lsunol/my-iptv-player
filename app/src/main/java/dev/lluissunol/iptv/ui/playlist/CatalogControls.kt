@@ -24,6 +24,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
@@ -115,6 +117,24 @@ internal fun sortLabel(sort: CatalogSort): String = stringResource(
     }
 )
 
+/** True when the arrow of this sort points up (smallest first). */
+internal fun sortPointsUp(sort: CatalogSort, reversed: Boolean): Boolean =
+    sort.naturallyAscending != reversed
+
+/** The direction in words, for the menu item and the button's description. */
+@Composable
+internal fun sortDirectionLabel(sort: CatalogSort, reversed: Boolean): String = stringResource(
+    when (sort) {
+        CatalogSort.PROVIDER -> R.string.sort_provider
+        CatalogSort.RATING ->
+            if (reversed) R.string.sort_dir_worst_first else R.string.sort_dir_best_first
+        CatalogSort.RECENT, CatalogSort.RELEASE ->
+            if (reversed) R.string.sort_dir_oldest_first else R.string.sort_dir_newest_first
+        CatalogSort.AZ ->
+            if (reversed) R.string.sort_dir_z_to_a else R.string.sort_dir_a_to_z
+    }
+)
+
 @Composable
 internal fun languageLabel(option: LanguageOption): String = stringResource(
     when (option) {
@@ -200,6 +220,7 @@ internal fun ResultsToolbar(
     val tabIndex = state.tabIndex
     val filters = state.activeSheetFilters
     val sort = state.currentSort
+    val reversed = state.currentSortReversed
 
     val displayed = formatNumber(state.displayedCount)
     val countText = if (filters > 0) {
@@ -208,7 +229,14 @@ internal fun ResultsToolbar(
         stringResource(R.string.items_count, displayed)
     }
     val text = if (sort != CatalogSort.PROVIDER) {
-        stringResource(R.string.items_count_sorted, countText, sortLabel(sort))
+        stringResource(
+            R.string.items_count_sorted,
+            countText,
+            sortLabel(sort),
+            stringResource(
+                if (sortPointsUp(sort, reversed)) R.string.sort_arrow_up else R.string.sort_arrow_down
+            )
+        )
     } else {
         countText
     }
@@ -245,6 +273,7 @@ internal fun ResultsToolbar(
         if (tabIndex != null && tabIndex.size >= 2) {
             SortButton(
                 current = sort,
+                reversed = reversed,
                 available = tabIndex.sorts,
                 showFootnote = tabIndex.sortsHidden,
                 onSelect = actions.onSort,
@@ -305,6 +334,7 @@ internal fun ResultsToolbar(
 @Composable
 private fun SortButton(
     current: CatalogSort,
+    reversed: Boolean,
     available: List<CatalogSort>,
     showFootnote: Boolean,
     onSelect: (CatalogSort) -> Unit,
@@ -319,7 +349,13 @@ private fun SortButton(
         }) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Sort,
-                contentDescription = stringResource(R.string.sort_cd, sortLabel(current)),
+                contentDescription = if (current == CatalogSort.PROVIDER) {
+                    stringResource(R.string.sort_cd, sortLabel(current))
+                } else {
+                    stringResource(
+                        R.string.sort_cd_dir, sortLabel(current), sortDirectionLabel(current, reversed)
+                    )
+                },
                 tint = if (current != CatalogSort.PROVIDER) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -342,6 +378,9 @@ private fun SortButton(
                     .semantics { heading() }
             )
             val azCd = stringResource(R.string.sort_az_cd)
+            val selectedCd = if (current == CatalogSort.PROVIDER) "" else stringResource(
+                R.string.sort_item_selected_cd, sortLabel(current), sortDirectionLabel(current, reversed)
+            )
             for (sort in available) {
                 val isSelected = sort == current
                 DropdownMenuItem(
@@ -353,8 +392,15 @@ private fun SortButton(
                     },
                     leadingIcon = {
                         if (isSelected) {
+                            // The provider order has no direction: a tick. Every
+                            // other order shows which way it runs; choosing it
+                            // again flips the arrow.
                             Icon(
-                                imageVector = Icons.Default.Check,
+                                imageVector = when {
+                                    sort == CatalogSort.PROVIDER -> Icons.Default.Check
+                                    sortPointsUp(sort, reversed) -> Icons.Default.ArrowUpward
+                                    else -> Icons.Default.ArrowDownward
+                                },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
@@ -370,7 +416,11 @@ private fun SortButton(
                     modifier = Modifier.semantics {
                         selected = isSelected
                         role = Role.RadioButton
-                        if (sort == CatalogSort.AZ) contentDescription = azCd
+                        if (isSelected && sort != CatalogSort.PROVIDER) {
+                            contentDescription = selectedCd
+                        } else if (sort == CatalogSort.AZ) {
+                            contentDescription = azCd
+                        }
                     }
                 )
             }

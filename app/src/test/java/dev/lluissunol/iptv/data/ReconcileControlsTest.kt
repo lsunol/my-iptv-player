@@ -27,6 +27,20 @@ class ReconcileControlsTest {
     }
 
     @Test
+    fun theSavedDirectionSurvivesAndAnInvalidSortLosesIt() {
+        val kept = reconcileControls(StoredControls("RECENT:REV", "RATING", null), measured)
+        assertEquals(CatalogSort.RECENT, kept.movieSort)
+        assertTrue(kept.movieReversed)
+        assertFalse(kept.seriesReversed)
+        assertFalse(kept.resetHappened)
+        // Release dates do not exist in the measured series: the whole choice goes, direction included.
+        val dropped = reconcileControls(StoredControls(null, "RELEASE:REV", null), measured)
+        assertEquals(CatalogSort.PROVIDER, dropped.seriesSort)
+        assertFalse(dropped.seriesReversed)
+        assertTrue(dropped.resetHappened)
+    }
+
+    @Test
     fun nothingStoredIsNotAReset() {
         val result = reconcileControls(StoredControls(null, null, null), measured)
         assertEquals(CatalogSort.PROVIDER, result.movieSort)

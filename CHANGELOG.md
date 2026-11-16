@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Ratings are now visible: poster cells show the rating as `7/10` in the
+  top-left corner, white and bold with a text shadow over a soft top gradient so
+  it reads on bright artwork. It deliberately has no star (the favourite star is
+  the only star in the app); titles without a rating show nothing. Rows, the
+  movie detail and the series header use the same `7/10` form. List rows show the facts the
+  provider sent, in order: rating, year, genres (unified, in Spanish), episode
+  runtime for series, and the date a movie was added while sorting by
+  "Añadidas recientemente". A panel with less data just gets a shorter line.
+- Choosing the active sort again reverses it. The tick in the sort menu is now
+  an arrow (up = smallest/oldest/A first, down = best/newest/Z first), the
+  count line shows the same arrow (`Mejor valoradas ↓`), and TalkBack announces
+  the direction in words. Titles without a value stay last in both directions,
+  and the direction is saved per list and tab.
 - Movies and Series can be sorted (provider order, "Añadidas recientemente",
   "Estreno más reciente", "Mejor valoradas", A-Z) and filtered by language
   (derived from category prefixes such as `ESPAÑA - …` / `|EN| …`), genre

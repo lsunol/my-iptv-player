@@ -32,14 +32,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import dev.lluissunol.iptv.ui.formatRating10
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -104,6 +114,7 @@ internal fun MoviePosterGrid(
                 posterUrl = item.posterUrl,
                 title = item.name,
                 qualityTag = item.qualityTag,
+                rating = item.rating,
                 cellSize = cellSize,
                 isFavorite = item.favoriteKey in favoriteKeys,
                 onClick = { onPlay(item) },
@@ -152,6 +163,7 @@ internal fun SeriesPosterGrid(
                 posterUrl = item.posterUrl,
                 title = item.name,
                 qualityTag = item.qualityTag,
+                rating = item.rating,
                 cellSize = cellSize,
                 isFavorite = item.favoriteKey in favoriteKeys,
                 onClick = { onOpen(item) },
@@ -179,6 +191,7 @@ private fun PosterCell(
     posterUrl: String?,
     title: String,
     qualityTag: String?,
+    rating: Double,
     cellSize: IntSize?,
     isFavorite: Boolean,
     onClick: () -> Unit,
@@ -222,6 +235,26 @@ private fun PosterCell(
                     QualityBadge(text = qualityTag, overImage = true)
                 }
             }
+            if (rating > 0.0) {
+                // Soft dark gradient along the top edge: it fades to nothing, so
+                // there is no visible box, and keeps the rating (and the star)
+                // legible on white or busy artwork.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Black.copy(alpha = 0.72f), Color.Transparent)
+                            )
+                        )
+                )
+                RatingBadge(
+                    rating = rating,
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
+            }
             FavoriteButton(
                 isFavorite = isFavorite,
                 onClick = onToggleFavorite,
@@ -238,6 +271,49 @@ private fun PosterCell(
             style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * The rating over a poster's top-left corner, as `7/10`: white, bold, with a
+ * text shadow, over the cell's top scrim (see [PosterCell]), so it stays
+ * readable over bright artwork. The "/10" is smaller and slightly translucent so
+ * the number is what the eye catches. A cell carries no state for it, and its
+ * description is the spoken rating.
+ */
+@Composable
+private fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
+    val number = formatRating10(rating)
+    val suffix = stringResource(R.string.rating_suffix)
+    val description = stringResource(R.string.rating_cd, number)
+    val text = buildAnnotatedString {
+        append(number)
+        withStyle(
+            SpanStyle(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        ) { append(suffix) }
+    }
+    Box(
+        modifier = modifier
+            .padding(start = 10.dp, end = 12.dp, top = 8.dp, bottom = 8.dp)
+            .semantics { contentDescription = description }
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge.copy(
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.95f),
+                    offset = Offset(0f, 3f),
+                    blurRadius = 10f
+                )
+            ),
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1
         )
     }
 }

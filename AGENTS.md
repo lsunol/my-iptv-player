@@ -221,6 +221,12 @@ unzip -p some.aar META-INF/com/android/build/gradle/aar-metadata.properties
 app/build/outputs/apk/debug/app-debug.apk
 
 # Install on a connected phone
+# STANDING RULE (owner, 2026-11-16): "send it to the phone" / "mándalo al móvil"
+# always means the RELEASE build, signed with the project key, installed over the
+# existing app with `-r` (keeps lists and favourites). The debug APK uses another
+# signature and fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE on the phone. Use
+# the debug build only on the emulator, or when the owner asks for it explicitly.
+# See .pi/skills/android-apk/SKILL.md "Send to the phone (release)".
 adb devices -l
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n dev.lluissunol.iptv/.MainActivity

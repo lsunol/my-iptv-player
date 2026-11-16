@@ -371,7 +371,7 @@ fun decodeVodCatalog(json: String): VodCatalog? =
             if (catalog.schemaVersion >= CATALOG_SCHEMA_VERSION) {
                 catalog
             } else {
-                // An old cache kept raw ratings (a percentage reads "★ 85" and passes
+                // An old cache kept raw ratings (a percentage reads "85/10" and passes
                 // "Nota ≥ 7"); clamp them to 0-10 until a refresh rebuilds it.
                 catalog.copy(
                     movies = catalog.movies.map { it.copy(rating = normalizeRating10(it.rating, null)) },

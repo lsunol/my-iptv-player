@@ -104,8 +104,19 @@
     <string name="sort_rating">Mejor valoradas</string>
     <string name="sort_az">A-Z</string>
     <string name="sort_az_cd">Alfabético, de la A a la Z</string>
+    <string name="sort_dir_best_first">de mayor a menor nota</string>
+    <string name="sort_dir_worst_first">de menor a mayor nota</string>
+    <string name="sort_dir_newest_first">de más reciente a más antiguo</string>
+    <string name="sort_dir_oldest_first">de más antiguo a más reciente</string>
+    <string name="sort_dir_a_to_z">de la A a la Z</string>
+    <string name="sort_dir_z_to_a">de la Z a la A</string>
+    <string name="sort_cd_dir">Ordenar. Orden actual: %1$s, %2$s</string>
+    <string name="sort_item_selected_cd">%1$s, %2$s. Pulsa de nuevo para invertir el orden</string>
+    <string name="sort_arrow_up">↑</string>
+    <string name="sort_arrow_down">↓</string>
+    <string name="added_on">Añadida el %1$s</string>
     <string name="sort_unavailable_hint">Solo se muestran los órdenes para los que esta lista tiene datos.</string>
-    <string name="items_count_sorted">%1$s · %2$s</string>
+    <string name="items_count_sorted">%1$s · %2$s %3$s</string>
     <string name="items_count_of">%1$s de %2$s títulos</string>
 
     <!-- Catálogo: filtros -->
@@ -211,7 +222,8 @@
     <string name="movie_cast">Reparto: %1$s</string>
     <string name="duration_hours_minutes">%1$d h %2$d min</string>
     <string name="duration_minutes">%1$d min</string>
-    <string name="rating_short">★ %1$s</string>
+    <string name="rating_short">%1$s/10</string>
+    <string name="rating_suffix">/10</string>
     <string name="rating_cd">Nota %1$s de 10</string>
 
     <!-- Cabecera de serie -->

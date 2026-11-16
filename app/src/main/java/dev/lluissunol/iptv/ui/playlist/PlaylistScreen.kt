@@ -83,6 +83,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import dev.lluissunol.iptv.R
+import androidx.compose.runtime.remember
+import dev.lluissunol.iptv.data.GenreNormalizer
+import dev.lluissunol.iptv.data.CatalogSort
 import dev.lluissunol.iptv.data.VodLayout
 import dev.lluissunol.iptv.data.cleanDisplayName
 import dev.lluissunol.iptv.data.model.Channel
@@ -561,6 +564,8 @@ private fun PlaylistContent(
                     vodListState.requestScrollToItem(0)
                 }
                 MovieCatalogueList(
+                    genreTable = state.catalog?.movieGenres.orEmpty(),
+                    showAdded = state.currentSort == CatalogSort.RECENT,
                     items = state.filteredMovies,
                     favoriteKeys = state.favoriteKeys,
                     listState = vodListState,
@@ -577,6 +582,7 @@ private fun PlaylistContent(
                     vodListState.requestScrollToItem(0)
                 }
                 SeriesCatalogueList(
+                    genreTable = state.catalog?.seriesGenres.orEmpty(),
                     items = state.filteredSeries,
                     favoriteKeys = state.favoriteKeys,
                     listState = vodListState,
@@ -618,6 +624,8 @@ private fun PlaylistContent(
  */
 @Composable
 private fun MovieCatalogueList(
+    genreTable: List<String>,
+    showAdded: Boolean,
     items: List<VodItem>,
     favoriteKeys: Set<String>,
     listState: LazyListState,
@@ -628,6 +636,8 @@ private fun MovieCatalogueList(
 ) {
     val playLabel = stringResource(R.string.play)
     val detailsLabel = stringResource(R.string.movie_details)
+    // The genre table is parsed once per catalogue, not once per row.
+    val genreLabels = remember(genreTable) { genreTable.map { GenreNormalizer.labels(it) } }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
@@ -646,7 +656,9 @@ private fun MovieCatalogueList(
                 onToggleFavorite = { onToggleFavorite(it.favoriteKey) },
                 onOpenDetails = onOpenDetails,
                 playLabel = playLabel,
-                detailsLabel = detailsLabel
+                detailsLabel = detailsLabel,
+                genreLabels = genreLabels,
+                showAdded = showAdded
             )
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -655,6 +667,7 @@ private fun MovieCatalogueList(
 
 @Composable
 private fun SeriesCatalogueList(
+    genreTable: List<String>,
     items: List<SeriesCard>,
     favoriteKeys: Set<String>,
     listState: LazyListState,
@@ -662,6 +675,7 @@ private fun SeriesCatalogueList(
     onToggleFavorite: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val genreLabels = remember(genreTable) { genreTable.map { GenreNormalizer.labels(it) } }
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
@@ -677,7 +691,8 @@ private fun SeriesCatalogueList(
                 card = card,
                 isFavorite = card.favoriteKey in favoriteKeys,
                 onOpen = onOpen,
-                onToggleFavorite = { onToggleFavorite(card.favoriteKey) }
+                onToggleFavorite = { onToggleFavorite(card.favoriteKey) },
+                genreLabels = genreLabels
             )
         }
         item { Spacer(Modifier.height(16.dp)) }

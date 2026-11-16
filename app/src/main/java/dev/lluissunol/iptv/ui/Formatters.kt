@@ -15,17 +15,33 @@ internal fun formatCompact(value: Int): String = when {
 internal fun formatNumber(value: Int): String =
     NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
+internal fun shortDay(epochMs: Long): String =
+    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(epochMs))
+
 internal fun shortDate(epochMs: Long): String =
     SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(Date(epochMs))
 
 /** A 0-10 rating with one decimal and the locale's separator; `7.0` reads `7`. */
 internal fun formatRating10(value: Double): String {
-    val rounded = Math.round(value * 10) / 10.0
-    val format = NumberFormat.getNumberInstance(Locale.getDefault()).apply {
-        minimumFractionDigits = 0
-        maximumFractionDigits = 1
+    // No NumberFormat here: this runs for every poster cell that binds, so it
+    // must be allocation-light. Only the decimal separator is locale-specific.
+    val tenths = Math.round(value * 10).toInt()
+    val fraction = tenths % 10
+    return if (fraction == 0) {
+        (tenths / 10).toString()
+    } else {
+        "${tenths / 10}${decimalSeparator()}$fraction"
     }
-    return format.format(rounded)
+}
+
+@Volatile private var cachedSeparator: Pair<Locale, Char>? = null
+
+private fun decimalSeparator(): Char {
+    val locale = Locale.getDefault()
+    cachedSeparator?.let { if (it.first == locale) return it.second }
+    val separator = java.text.DecimalFormatSymbols.getInstance(locale).decimalSeparator
+    cachedSeparator = locale to separator
+    return separator
 }
 
 /** Whole hours and the remaining minutes of a duration in seconds. */
