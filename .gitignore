@@ -43,3 +43,6 @@ desktop.ini
 
 # --- Pi project package installs (generated) ---
 .pi/npm/
+
+# --- website demo panel: downloaded video (CC BY, regenerate with scripts/demo-xtream-panel.mjs notes) ---
+scripts/demo-assets/video/

@@ -1,222 +1,247 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Open IPTV — un reproductor IPTV sencillo y abierto para Android</title>
-  <meta name="description" content="Reproductor IPTV para Android, de código abierto. Pega tu lista M3U o Xtream y mira. Sin cuentas, sin anuncios, sin analíticas.">
+  <title data-i18n="meta_title">Open IPTV — yet another IPTV app for Android, ad-free and open source</title>
+  <meta name="description" content="Yet another IPTV app for Android: no ads, no accounts, open source. Paste your M3U or Xtream list and watch. If you don't like it, don't use it; if it lacks something, add it yourself." data-i18n-attr="content:meta_desc">
   <meta name="theme-color" content="#070B12">
   <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/brand/icon-512.png">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
   <meta property="og:title" content="Open IPTV">
-  <meta property="og:description" content="Un reproductor IPTV para Android sencillo, transparente y de código abierto.">
+  <meta property="og:description" content="Yet another IPTV app for Android: simple, ad-free and open source." data-i18n-attr="content:og_desc">
   <meta property="og:image" content="assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Pick the language before first paint (see main.js). If it is not English, hide the
+    // page until the translation is applied; the CSS animation reveals it anyway after
+    // 1.2 s so a failed download never leaves a blank page.
+    (function () {
+      try {
+        var ok = { en: 1, es: 1, ca: 1 }, q = /[?&]lang=(\w+)/.exec(location.search), l = q && q[1];
+        if (!ok[l]) l = localStorage.getItem('lang');
+        if (!ok[l]) {
+          l = 'en';
+          var n = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'en'];
+          for (var i = 0; i < n.length; i++) { var c = String(n[i]).slice(0, 2).toLowerCase(); if (ok[c]) { l = c; break; } }
+        }
+        window.__lang = l;
+        if (l !== 'en') document.documentElement.setAttribute('data-i18n-state', 'pending');
+      } catch (e) {}
+    })();
+  </script>
   <script src="main.js" defer></script>
 </head>
 <body>
-  <a class="skip" href="#main">Saltar al contenido</a>
+  <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
 
   <header class="nav">
-    <a class="nav__brand" href="#top" aria-label="Open IPTV, inicio">
+    <a class="nav__brand" href="#top" aria-label="Open IPTV, home" data-i18n-attr="aria-label:brand_aria">
       <img src="assets/brand/mark.svg" alt="" width="32" height="32">
       <span>Open IPTV</span>
     </a>
-    <nav aria-label="Secciones">
-      <a href="#funciones">Funciones</a>
-      <a href="#descargar">Descargar</a>
-      <a href="#autor">Autor</a>
+    <nav aria-label="Sections" data-i18n-attr="aria-label:nav_aria">
+      <a href="#funciones" data-i18n="nav_features">Features</a>
+      <a href="#descargar" data-i18n="nav_download">Download</a>
+      <a href="#autor" data-i18n="nav_author">Author</a>
       <a href="https://github.com/lsunol/my-iptv-player" rel="noopener">GitHub</a>
     </nav>
+    <div class="lang" role="group" aria-label="Language" data-i18n-attr="aria-label:lang_aria">
+      <a href="?lang=ca" hreflang="ca" lang="ca" data-lang="ca" title="Català">CA</a>
+      <a href="?lang=es" hreflang="es" lang="es" data-lang="es" title="Español">ES</a>
+      <a href="?lang=en" hreflang="en" lang="en" data-lang="en" title="English" aria-current="true">EN</a>
+    </div>
   </header>
 
   <main id="main">
     <!-- 1. HERO -->
     <section class="hero" id="top">
       <div class="hero__text">
-        <p class="eyebrow">Android · Código abierto · GPL-3.0</p>
-        <h1>Tu lista.<br><span class="grad">Tu reproductor.</span><br>Nada más.</h1>
-        <p class="lead">
-          Open IPTV es un reproductor IPTV pequeño y transparente. Pegas tu lista
-          M3U o Xtream, buscas un canal y lo ves. Sin cuentas, sin anuncios,
-          sin analíticas.
-        </p>
+        <p class="eyebrow" data-i18n="hero_eyebrow">Android · Open source · GPL-3.0</p>
+        <h1 data-i18n="hero_h1">Yet another IPTV app.<br><span class="grad">No ads.</span><br>That's it.</h1>
+        <p class="lead" data-i18n="hero_lead">Open IPTV plays your M3U or Xtream list and does nothing else. It doesn't try to be the best on the market, just a simple app that stays out of your way. If it doesn't convince you, don't use it; if it lacks something, the code is yours to extend.</p>
         <div class="cta">
           <a class="btn btn--primary" href="https://github.com/lsunol/my-iptv-player/releases/latest/download/open-iptv.apk">
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
-            Descargar APK
+            <span data-i18n="btn_apk">Download APK</span>
           </a>
-          <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player" rel="noopener">Ver el código</a>
+          <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player" rel="noopener" data-i18n="btn_code">View the code</a>
         </div>
-        <p class="meta" data-release>Android 7.0 o superior</p>
+        <p class="meta" data-release data-tpl="Version {tag} · {date} · Android 7.0 or later" data-i18n-attr="data-tpl:release_tpl" data-i18n="release_default">Android 7.0 or later</p>
+        <ul class="pills" aria-label="Principles" data-i18n-attr="aria-label:pills_aria">
+          <li data-i18n="pill1">No account</li>
+          <li data-i18n="pill2">No ads</li>
+          <li data-i18n="pill3">No analytics</li>
+          <li data-i18n="pill4">No servers of its own</li>
+          <li data-i18n="pill5">Ships empty</li>
+          <li data-i18n="pill6">Open source</li>
+        </ul>
       </div>
       <div class="hero__phone">
         <div class="phone">
-          <img src="assets/screens/hero.png" alt="Lista de canales en directo de Open IPTV" width="1080" height="2340">
+          <img src="assets/screens/hero.webp" alt="Open IPTV live channel list" width="1080" height="2340" data-i18n-attr="alt:hero_alt">
         </div>
       </div>
     </section>
 
-    <!-- Principios -->
-    <section class="pills" aria-label="Principios">
-      <ul>
-        <li>Sin cuenta</li>
-        <li>Sin anuncios</li>
-        <li>Sin analíticas</li>
-        <li>Sin servidores propios</li>
-        <li>Viene vacía</li>
-        <li>Código abierto</li>
-      </ul>
-    </section>
-
-    <!-- 2. STORY: scroll con teléfono sticky -->
+    <!-- 2. STORY -->
     <section class="story" id="funciones">
       <div class="story__steps">
         <article class="step" data-step="0">
           <p class="step__n">01</p>
-          <h2>Tus listas, con nombre</h2>
-          <p>
-            Añade una o varias listas (URL M3U/M3U8 o servidor Xtream), ponles
-            nombre y cambia entre ellas. Las credenciales se ocultan en pantalla
-            y todo se guarda solo en tu móvil.
-          </p>
-          <img class="step__img" src="assets/screens/step-lists.png" alt="Pantalla de listas guardadas" loading="lazy" width="1080" height="2340">
+          <h2 data-i18n="step1_h">Your lists, with names</h2>
+          <p data-i18n="step1_p">Add one or more lists (M3U/M3U8 URL or Xtream server), name them and switch between them. Credentials are masked on screen and everything is stored only on your phone.</p>
+          <img class="step__img" src="assets/screens/step-lists.webp" alt="Saved lists screen" loading="lazy" width="1080" height="2340" data-i18n-attr="alt:step1_alt">
         </article>
         <article class="step" data-step="1">
           <p class="step__n">02</p>
-          <h2>Miles de canales, encontrados al momento</h2>
-          <p>
-            Pestañas de Directo, Películas y Series, filtro por grupo y búsqueda
-            que ignora tildes y mayúsculas: escribe «espana» y encuentra
-            «ESPAÑA». Pensado para listas de decenas de miles de entradas.
-          </p>
-          <img class="step__img" src="assets/screens/step-search.png" alt="Búsqueda de canales sin tildes" loading="lazy" width="1080" height="2340">
+          <h2 data-i18n="step2_h">Big lists without the lag</h2>
+          <p data-i18n="step2_p">Live, Movies and Series tabs, group filter and a search that ignores accents and case: type “espana” and it finds “ESPAÑA”. Tested with lists of tens of thousands of entries.</p>
+          <img class="step__img" src="assets/screens/step-search.webp" alt="Accent-insensitive channel search" loading="lazy" width="1080" height="2340" data-i18n-attr="alt:step2_alt">
         </article>
         <article class="step" data-step="2">
           <p class="step__n">03</p>
-          <h2>Películas y series con carátula</h2>
-          <p>
-            Con un servidor Xtream, las películas y series se muestran en
-            cuadrícula con su portada, ordenables y filtrables, y las series se
-            abren por temporadas y episodios.
-          </p>
-          <img class="step__img" src="assets/screens/step-catalog.png" alt="Cuadrícula de películas con portadas" loading="lazy" width="1080" height="2340">
+          <h2 data-i18n="step3_h">Movies and series, if your provider offers them</h2>
+          <p data-i18n="step3_p">With an Xtream server, movies and series appear in a poster grid, and series open by season and episode. With a plain M3U you get the list as it is.</p>
+          <img class="step__img" src="assets/screens/step-catalog.webp" alt="Movie grid with posters" loading="lazy" width="1080" height="2340" data-i18n-attr="alt:step3_alt">
         </article>
       </div>
       <div class="story__sticky" aria-hidden="true">
         <div class="phone phone--stack">
-          <img src="assets/screens/step-lists.png" alt="" class="is-active" width="1080" height="2340">
-          <img src="assets/screens/step-search.png" alt="" loading="lazy" width="1080" height="2340">
-          <img src="assets/screens/step-catalog.png" alt="" loading="lazy" width="1080" height="2340">
+          <img src="assets/screens/step-lists.webp" alt="" class="is-active" width="1080" height="2340">
+          <img src="assets/screens/step-search.webp" alt="" loading="lazy" width="1080" height="2340">
+          <img src="assets/screens/step-catalog.webp" alt="" loading="lazy" width="1080" height="2340">
         </div>
         <ol class="dots"><li class="is-active"></li><li></li><li></li></ol>
       </div>
     </section>
 
-    <!-- Banda apaisada -->
+    <!-- Landscape band -->
     <section class="wide">
       <div class="wide__frame">
-        <img src="assets/screens/player-landscape.png" alt="Reproducción a pantalla completa en horizontal" loading="lazy" width="2340" height="1080">
+        <img src="assets/screens/player-landscape.webp" alt="Fullscreen playback in landscape" loading="lazy" width="2340" height="1080" data-i18n-attr="alt:wide_alt">
       </div>
       <div class="features">
         <div>
-          <h3>Pantalla completa de verdad</h3>
-          <p>Horizontal e inmersiva, con salida explícita. Girar el móvil no corta la emisión.</p>
+          <h3 data-i18n="f1_h">Fullscreen</h3>
+          <p data-i18n="f1_p">Landscape, with the usual controls: pause, −5 s, +15 s and mute. Rotating the phone doesn't interrupt playback.</p>
         </div>
         <div>
-          <h3>Errores que se entienden</h3>
-          <p>«Suscripción caducada», «servidor no encontrado», «formato no soportado»… nunca un «error desconocido».</p>
+          <h3 data-i18n="f2_h">Errors that explain themselves</h3>
+          <p data-i18n="f2_p">“Subscription expired”, “server not found”, “unsupported format”… never an “unknown error”.</p>
         </div>
         <div>
-          <h3>Funciona sin conexión al abrir</h3>
-          <p>Guarda la última lista que funcionó. Si una actualización falla, conservas la anterior.</p>
+          <h3 data-i18n="f3_h">Opens instantly</h3>
+          <p data-i18n="f3_p">It keeps the last list that worked. If a refresh fails, you keep the previous one.</p>
         </div>
         <div>
-          <h3>Favoritos y silencio</h3>
-          <p>Favoritos por categoría y un botón para silenciar solo la app, sin tocar el volumen del móvil.</p>
+          <h3 data-i18n="f4_h">The basics, done well</h3>
+          <p data-i18n="f4_p">Favourites per category and a button that mutes only the app, without touching your phone's volume. Nothing more.</p>
         </div>
       </div>
     </section>
 
-    <!-- 3. DESCARGAR -->
+    <!-- Ethos -->
+    <section class="ethos" id="filosofia">
+      <h2 data-i18n="ethos_h">Yet another app, on purpose</h2>
+      <p class="lead" data-i18n="ethos_lead">There are plenty of IPTV apps, some of them very complete. This one is deliberately small: it plays lists, has no ads, asks for no account and sends nothing anywhere.</p>
+      <div class="ethos__cols">
+        <div>
+          <h3 data-i18n="e1_h">Don't like it?</h3>
+          <p data-i18n="e1_p">No problem. Uninstall it and use another. There's no account to close and no data to recover.</p>
+        </div>
+        <div>
+          <h3 data-i18n="e2_h">Missing something?</h3>
+          <p data-i18n="e2_p">It's Kotlin and Jetpack Compose, no exotic frameworks. Clone the repository, add what you miss and, if you want, send a pull request.</p>
+          <p><a href="https://github.com/lsunol/my-iptv-player" data-i18n="btn_code">View the code</a></p>
+        </div>
+        <div>
+          <h3 data-i18n="e3_h">What it doesn't do</h3>
+          <p data-i18n="e3_p">No programme guide (EPG), recording, Chromecast or Android TV. Maybe someday; maybe you'll add it first.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DOWNLOAD -->
     <section class="download" id="descargar">
-      <h2>Descargar</h2>
-      <p class="lead">Gratis y sin registro. El APK está firmado con la clave del proyecto, así que las versiones nuevas se instalan encima sin perder tus listas.</p>
+      <h2 data-i18n="nav_download">Download</h2>
+      <p class="lead" data-i18n="dl_lead">Free, no sign-up. It isn't on Google Play: you install it from an APK file, which needs an Android permission explained below. New versions install over the old one without losing your lists.</p>
       <div class="cta cta--center">
         <a class="btn btn--primary" href="https://github.com/lsunol/my-iptv-player/releases/latest/download/open-iptv.apk">
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
-          Descargar APK
+          <span data-i18n="btn_apk">Download APK</span>
         </a>
-        <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player/releases" rel="noopener">Todas las versiones</a>
+        <a class="btn btn--ghost" href="https://github.com/lsunol/my-iptv-player/releases" rel="noopener" data-i18n="btn_all">All versions</a>
       </div>
-      <p class="meta" data-release>Android 7.0 o superior</p>
+      <p class="meta" data-release data-tpl="Version {tag} · {date} · Android 7.0 or later" data-i18n-attr="data-tpl:release_tpl" data-i18n="release_default">Android 7.0 or later</p>
 
-      <div class="cards">
-        <div class="card">
-          <h3>1 · Descarga</h3>
-          <p>Abre esta página en el móvil y pulsa <em>Descargar APK</em>.</p>
-        </div>
-        <div class="card">
-          <h3>2 · Permite la instalación</h3>
-          <p>Android te pedirá permiso para instalar desde el navegador. Acéptalo solo para este archivo.</p>
-        </div>
-        <div class="card">
-          <h3>3 · Pega tu lista</h3>
-          <p>Abre la app, añade la URL de tu proveedor y listo.</p>
-        </div>
-      </div>
+      <ol class="cards steps">
+        <li class="card">
+          <h3 data-i18n="d1_h">Download the APK</h3>
+          <p data-i18n="d1_p">Open this page on your phone and tap <em>Download APK</em>. Chrome may warn that “this type of file can harm your device”: that's the generic warning for any APK; tap <em>Download anyway</em>.</p>
+        </li>
+        <li class="card">
+          <h3 data-i18n="d2_h">Allow installing unknown apps</h3>
+          <p data-i18n="d2_p">When you open the file, Android will say your phone can't install apps from this source. Tap <em>Settings</em> and turn on <em>Allow from this source</em> for the browser (or file manager) you're opening it with. It's a per-app permission, and you can revoke it afterwards.</p>
+          <p class="card__note" data-i18n="d2_note">On Android 7 it's a global setting: <em>Settings → Security → Unknown sources</em>. Names vary by manufacturer.</p>
+        </li>
+        <li class="card">
+          <h3 data-i18n="d3_h">Install</h3>
+          <p data-i18n="d3_p">Go back and tap <em>Install</em>. If Google Play Protect warns that the app is unknown, that's because it isn't in the store: choose <em>More details → Install anyway</em>.</p>
+        </li>
+        <li class="card">
+          <h3 data-i18n="d4_h">Paste your list</h3>
+          <p data-i18n="d4_p">Open the app, add your provider's M3U URL or Xtream details and you're done. It ships empty on purpose.</p>
+        </li>
+      </ol>
 
       <details class="verify">
-        <summary>¿Quieres comprobar que el APK es el original?</summary>
-        <p>Cada versión publica el SHA-256 del APK en sus notas. Compáralo con:</p>
+        <summary data-i18n="verify_sum">Want to check the APK is the original?</summary>
+        <p data-i18n="verify_p1">Each release publishes the APK's SHA-256 in its notes. Compare it with:</p>
         <pre><code>sha256sum open-iptv.apk</code></pre>
-        <p>O compila tú mismo la app desde el <a href="https://github.com/lsunol/my-iptv-player">código fuente</a>.</p>
+        <p data-i18n="verify_p2">Or build the app yourself from the <a href="https://github.com/lsunol/my-iptv-player">source code</a>.</p>
       </details>
     </section>
 
-    <!-- Aviso legal -->
+    <!-- Legal notice -->
     <section class="notice" id="aviso">
-      <h2>Qué no es Open IPTV</h2>
-      <p>
-        Open IPTV es solo un reproductor. <strong>No incluye canales, listas ni
-        proveedores</strong>, y no te ayudará a encontrarlos. Necesitas una lista
-        que tengas derecho a usar. No está afiliada a ningún proveedor ni
-        cadena.
-      </p>
-      <h3 id="privacidad">Privacidad</h3>
-      <p>
-        La app no recoge ningún dato. Solo se conecta a las direcciones que tú
-        le das: tu lista, los canales y sus logotipos. Tus listas y favoritos
-        se guardan en tu móvil y en ningún otro sitio. Esta web no usa cookies
-        ni analíticas.
-      </p>
+      <h2 data-i18n="notice_h">What Open IPTV is not</h2>
+      <p data-i18n="notice_p">Open IPTV is just a player, and doesn't try to be more. <strong>It includes no channels, lists or providers</strong>, and won't help you find them. You need a list you have the right to use. It isn't affiliated with any provider or channel.</p>
+      <h3 id="privacidad" data-i18n="priv_h">Privacy</h3>
+      <p data-i18n="priv_p">The app collects no data. It only connects to the addresses you give it: your list, the channels and their logos. Your lists and favourites are stored on your phone and nowhere else. This website uses no cookies or analytics.</p>
     </section>
 
-    <!-- AUTOR -->
-    <section class="about" id="autor">
-      <img class="about__avatar" src="assets/about/avatar.jpg" alt="Lluís Suñol" width="400" height="400" loading="lazy">
-      <div>
-        <p class="eyebrow">Autor</p>
-        <h2>Hecho por Lluís Suñol</h2>
-        <p>
-          Hice Open IPTV porque quería un reproductor que hiciera una cosa y la
-          hiciera bien, sin cuentas ni publicidad, y que explicara qué pasa cuando
-          algo falla. Es código abierto: puedes leerlo, compilarlo y mejorarlo.
-        </p>
-        <ul class="links">
-          <li><a href="https://lluissunol.dev" rel="me noopener">lluissunol.dev</a></li>
-          <li><a href="https://github.com/lsunol" rel="me noopener">GitHub</a></li>
-          <li><a href="https://www.linkedin.com/in/lluissunol/" rel="me noopener">LinkedIn</a></li>
-        </ul>
+    <!-- AUTHOR -->
+    <section class="about" id="autor" aria-labelledby="autor-title">
+      <div class="about__card">
+        <img class="about__avatar" src="assets/about/avatar.jpg" alt="Lluís Suñol" width="400" height="400" loading="lazy">
+        <div class="about__body">
+          <p class="eyebrow" data-i18n="about_eyebrow">Author</p>
+          <h2 id="autor-title">Lluís Suñol</h2>
+          <p class="about__role" data-i18n="about_role">Senior Software Engineer · AI-powered development</p>
+          <p data-i18n="about_p">I've spent twenty years building backend software and now I combine it with AI agents and models. Open IPTV is a personal project: I almost called it “Yet another IPTV app”, and that's the spirit. I wanted a player with no accounts or ads that explains what went wrong when something fails.</p>
+          <dl class="about__stats">
+            <div><dt data-i18n="s1_n">20+</dt><dd data-i18n="s1_l">years of programming</dd></div>
+            <div><dt data-i18n="s2_n">4 days</dt><dd data-i18n="s2_l">from idea to app</dd></div>
+            <div><dt data-i18n="s3_n">8</dt><dd data-i18n="s3_l">AI agents in a team</dd></div>
+            <div><dt data-i18n="s4_n">≈ $15</dt><dd data-i18n="s4_l">AI cost</dd></div>
+          </dl>
+          <ul class="links">
+            <li><a class="btn btn--ghost" href="https://lluissunol.dev" rel="me noopener" data-i18n="link_portfolio">Portfolio</a></li>
+            <li><a class="btn btn--ghost" href="https://github.com/lsunol" rel="me noopener">GitHub</a></li>
+            <li><a class="btn btn--ghost" href="https://www.linkedin.com/in/lluissunol/" rel="me noopener">LinkedIn</a></li>
+          </ul>
+        </div>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>© <span data-year>2026</span> Lluís Suñol · Open IPTV es software libre bajo licencia <a href="https://github.com/lsunol/my-iptv-player/blob/main/LICENSE">GPL-3.0</a>.</p>
-    <p class="footer__small">Las capturas usan listas de demostración. Sintel © Blender Foundation, CC BY 3.0.</p>
+    <p>© <span data-year>2026</span> Lluís Suñol · <span data-i18n="foot_1">Open IPTV is free software under the <a href="https://github.com/lsunol/my-iptv-player/blob/main/LICENSE">GPL-3.0</a> licence.</span></p>
+    <p class="footer__small" data-i18n="foot_2">Screenshots use demo content only: Blender Foundation open movies (Sintel, Big Buck Bunny, Tears of Steel, Elephants Dream, Cosmos Laundromat, Spring, Coffee Run and Charge), © Blender Foundation | blender.org, licensed CC BY 3.0 / 4.0. Posters from Wikimedia Commons.</p>
   </footer>
 </body>
 </html>
