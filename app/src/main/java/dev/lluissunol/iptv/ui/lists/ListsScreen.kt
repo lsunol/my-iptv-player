@@ -51,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -310,7 +311,7 @@ private fun listSubtitle(list: PlaylistConfig, isActive: Boolean): String {
         )
     )
     list.displayHost?.let { parts += it }
-    list.lastLoadedAt?.let { parts += stringResource(R.string.list_updated_at, shortDate(it)) }
+    list.lastLoadedAt?.let { parts += stringResource(R.string.list_updated_at, shortDate(it, android.text.format.DateFormat.is24HourFormat(LocalContext.current))) }
     if (isActive) parts += stringResource(R.string.list_last_used)
     return parts.joinToString(" · ")
 }

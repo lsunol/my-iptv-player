@@ -21,6 +21,8 @@ URL or Xtream server, one active list at a time, per-list cache) was approved
 and merged on 2026-11-01. It is in scope, and the older "single list only" rule
 is superseded.
 
+Explicit scope decision on record: **multilingual UI** (approved 2026-11-17): en (default), es, ca, de, fr, it, pt; see "Multilingual UI" below. Provider data (groups, categories, titles) is never translated.
+
 Explicit scope decision on record: **catalogue sorting, filters and detail metadata** (approved 2026-11-15, `design/ui/catalog-sort-filter*.md`): sort and filter controls on the Movies/Series tabs that are offered only when the loaded catalogue carries the data (any Xtream panel), long-press movie detail from `get_vod_info` (display only, never used for playback) and richer series headers. Metadata-only; no third-party services.
 
 Explicit scope decision on record: **Xtream `player_api.php` catalogue for
@@ -72,8 +74,15 @@ In scope:
 - A release-signed APK published on GitHub Releases, plus a debug APK for
   development with `adb install`.
 - Actionable error messages. "Unknown error" is a bug.
-- Spanish UI by default (`values/strings.xml`), with all user-facing text in
-  resources so English can be added later.
+- Multilingual UI (decision 2026-11-17): English (`values/`, the fallback),
+  Spanish, Catalan, German, French, Italian and Portuguese (`values-<lang>/`).
+  All user-facing text lives in resources; data/player layers carry `UiText`
+  (resource id + args), never a `Context` or literal text. Language selection is plain Android
+  resolution, no custom code: the first language in the user's list that the
+  app ships wins (so Catalan only wins when it is the first supported one),
+  and English is the fallback when none matches. The Android 13+ per-app
+  language works through `locales_config.xml`. New strings must be added
+  to all 7 files.
 
 Out of scope for v1 (unless the user explicitly asks):
 

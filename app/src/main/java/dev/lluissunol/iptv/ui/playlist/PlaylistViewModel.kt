@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.lluissunol.iptv.OpenTvApplication
+import dev.lluissunol.iptv.i18n.UiText
 import dev.lluissunol.iptv.R
 import dev.lluissunol.iptv.data.CatalogIndex
 import dev.lluissunol.iptv.data.CatalogSort
@@ -141,7 +142,7 @@ data class UiState(
     val totalBytes: Long = -1,
     val parsedEntries: Int = 0,
     val lastUpdated: Long? = null,
-    val error: String? = null,
+    val error: UiText? = null,
     val selectedChannel: Channel? = null,
     val showFavorites: Boolean = false,
     val favoriteKeys: Set<String> = emptySet(),
@@ -157,7 +158,7 @@ data class UiState(
     val selectedSeries: SeriesCard? = null,
     val seriesInfo: SeriesInfo? = null,
     val seriesLoading: Boolean = false,
-    val seriesError: String? = null,
+    val seriesError: UiText? = null,
     val selectedSeason: Int? = null,
     /** Catalogue posters (movies / series) whose image host refuses connections. */
     val unreachableMoviePosters: Int = 0,
@@ -189,7 +190,7 @@ data class UiState(
     val movieInfo: MovieInfo? = null,
     val movieInfoLoading: Boolean = false,
     /** The mapped, actionable reason the movie detail could not load. */
-    val movieInfoError: String? = null
+    val movieInfoError: UiText? = null
 ) {
     /** Index of the current Movies/Series tab, null elsewhere. */
     val tabIndex: TabIndex?
@@ -988,7 +989,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
     private fun loadMovieInfo(list: PlaylistConfig, vodId: Long) {
         movieJob?.cancel()
         movieJob = viewModelScope.launch {
-            val failure: String? = try {
+            val failure: UiText? = try {
                 val info = repository.getMovieInfo(list, vodId)
                 if (_state.value.selectedMovie?.streamId == vodId) {
                     _state.update {
@@ -1001,7 +1002,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
             } catch (e: PlaylistException) {
                 e.userMessage()
             } catch (e: Exception) {
-                getApplication<Application>().getString(R.string.movie_detail_error_generic)
+                UiText.of(R.string.movie_detail_error_generic)
             }
             if (_state.value.selectedMovie?.streamId == vodId) {
                 _state.update { it.copy(movieInfoLoading = false, movieInfoError = failure) }
@@ -1127,8 +1128,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     _state.update {
                         it.copy(
                             seriesLoading = false,
-                            seriesError = "No se pudieron cargar los episodios. " +
-                                "Comprueba tu conexión e inténtalo de nuevo."
+                            seriesError = UiText.of(R.string.series_load_error)
                         )
                     }
                 }
@@ -1347,7 +1347,7 @@ class PlaylistViewModel(application: Application) : AndroidViewModel(application
                     it.copy(
                         isLoading = false,
                         isReadingCache = false,
-                        error = "No se pudo cargar la lista."
+                        error = UiText.of(R.string.err_load_failed)
                     )
                 }
             }

@@ -1,5 +1,7 @@
 package dev.lluissunol.iptv.ui.series
 
+import dev.lluissunol.iptv.i18n.UiText
+import dev.lluissunol.iptv.i18n.asString
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,7 +81,7 @@ fun SeriesDetailScreen(
     genres: List<GenreLabel>,
     selectedSeason: Int?,
     isLoading: Boolean,
-    error: String?,
+    error: UiText?,
     favoriteKeys: Set<String>,
     onBack: () -> Unit,
     onRetry: () -> Unit,
@@ -147,7 +149,7 @@ fun SeriesDetailScreen(
             )
 
             error?.let { message ->
-                DetailErrorBanner(message = message, onRetry = onRetry, onDismiss = onClearError)
+                DetailErrorBanner(message = message.asString(), onRetry = onRetry, onDismiss = onClearError)
             }
 
             when {

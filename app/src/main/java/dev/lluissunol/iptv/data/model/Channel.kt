@@ -1,5 +1,7 @@
 package dev.lluissunol.iptv.data.model
 
+import dev.lluissunol.iptv.i18n.UiText
+
 enum class SourceType {
     LIVE,
     MOVIE,
@@ -39,7 +41,7 @@ data class GroupCount(
 data class Playlist(
     val channels: List<Channel>,
     val groups: List<GroupCount>,
-    val warnings: List<String>,
+    val warnings: List<UiText>,
     val bytes: Long,
     val counts: Map<SourceType, Int>,
     val groupsByType: Map<SourceType, List<GroupCount>> = emptyMap()

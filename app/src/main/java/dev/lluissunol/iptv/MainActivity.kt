@@ -9,6 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import dev.lluissunol.iptv.ui.OpenTvApp
 
 class MainActivity : ComponentActivity() {
+    // Language: no custom logic. Android picks the first language of the
+    // user's list that the app ships (en, es, ca, de, fr, it, pt) and falls
+    // back to English (`values/`) when none matches.
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(

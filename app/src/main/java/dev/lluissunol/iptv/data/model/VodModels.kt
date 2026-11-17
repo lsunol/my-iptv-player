@@ -5,6 +5,7 @@ import dev.lluissunol.iptv.data.CatalogEntry
 import dev.lluissunol.iptv.data.GenreLabel
 import dev.lluissunol.iptv.data.GenreNormalizer
 import dev.lluissunol.iptv.data.SearchNormalizer
+import dev.lluissunol.iptv.data.UNNAMED_TITLE
 import dev.lluissunol.iptv.data.XtreamApiCatalog
 import dev.lluissunol.iptv.data.XtreamStreamMatcher
 import dev.lluissunol.iptv.data.currentYearUtc
@@ -241,7 +242,7 @@ fun buildVodCatalog(
     for (dto in api.vodStreams) {
         if (dto.streamId <= 0L) continue
         if (!seenMovieIds.add(dto.streamId)) continue
-        val name = dto.name?.trim()?.takeIf { it.isNotEmpty() } ?: "Sin nombre"
+        val name = dto.name?.trim()?.takeIf { it.isNotEmpty() } ?: UNNAMED_TITLE
         val matched = matcher.movie(dto.streamId)
         val url = matched?.url ?: fallbackUrl("movie", dto.streamId.toString())
         if (url == null) continue
@@ -266,7 +267,7 @@ fun buildVodCatalog(
     for (dto in api.seriesList) {
         if (dto.seriesId <= 0L) continue
         if (!seenSeriesIds.add(dto.seriesId)) continue
-        val name = dto.name?.trim()?.takeIf { it.isNotEmpty() } ?: "Sin nombre"
+        val name = dto.name?.trim()?.takeIf { it.isNotEmpty() } ?: UNNAMED_TITLE
         series += SeriesCard(
             seriesId = dto.seriesId,
             name = name,

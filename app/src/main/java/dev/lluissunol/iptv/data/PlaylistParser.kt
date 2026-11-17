@@ -1,10 +1,12 @@
 package dev.lluissunol.iptv.data
 
+import dev.lluissunol.iptv.R
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.GroupCount
 import dev.lluissunol.iptv.data.model.Playlist
 import dev.lluissunol.iptv.data.model.SourceType
 import dev.lluissunol.iptv.data.model.qualityTagOf
+import dev.lluissunol.iptv.i18n.UiText
 import java.io.BufferedReader
 import java.io.Reader
 import java.io.StringReader
@@ -59,7 +61,7 @@ object PlaylistParser {
         onProgress: (parsedEntries: Int) -> Unit = {}
     ): Playlist {
         val channels = ArrayList<Channel>(4096)
-        val warnings = ArrayList<String>(8)
+        val warnings = ArrayList<UiText>(8)
         val groupCounts = HashMap<String, Int>(256)
         val groupCountsByType = HashMap<SourceType, HashMap<String, Int>>(4)
         val counts = HashMap<SourceType, Int>(4)
@@ -94,7 +96,7 @@ object PlaylistParser {
                         val (head, displayName) = splitExtInf(line.substring(8))
                         val attrs = parseAttributes(head)
                         val name = displayName.ifBlank {
-                            attrs["tvg-name"] ?: attrs["tvg-id"] ?: "Canal sin nombre"
+                            attrs["tvg-name"] ?: attrs["tvg-id"] ?: UNNAMED_CHANNEL
                         }.trim()
                         pending = Pending(
                             name = name,
@@ -115,11 +117,11 @@ object PlaylistParser {
                     else -> {
                         val entry = pending
                         if (entry == null) {
-                            addWarning(warnings, "Línea $lineNumber: URL sin #EXTINF, ignorada.")
+                            addWarning(warnings, UiText.of(R.string.warning_url_without_extinf, lineNumber))
                         } else {
                             val resolved = resolveUrl(line, baseUrl)
                             if (resolved == null) {
-                                addWarning(warnings, "Línea $lineNumber: URL no válida, ignorada.")
+                                addWarning(warnings, UiText.of(R.string.warning_invalid_url, lineNumber))
                             } else {
                                 val type = classify(resolved, entry.group)
                                 val channel = Channel(
@@ -176,7 +178,7 @@ object PlaylistParser {
         )
     }
 
-    private fun addWarning(warnings: MutableList<String>, message: String) {
+    private fun addWarning(warnings: MutableList<UiText>, message: UiText) {
         if (warnings.size < 20) warnings += message
     }
 

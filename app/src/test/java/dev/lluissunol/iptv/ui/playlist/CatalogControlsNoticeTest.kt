@@ -141,7 +141,7 @@ class CatalogControlsNoticeTest {
         // The outdated text points at the remedy and does not promise a feature a
         // bare panel would not deliver after the refresh.
         val outdated = Regex("""<string name="catalog_outdated">([^<]*)""").find(strings)!!.groupValues[1]
-        assertEquals(true, outdated.contains("Actualiza la lista"))
-        assertEquals(false, outdated.contains("género"))
+        assertEquals(true, outdated.contains("Refresh the playlist"))
+        assertEquals(false, outdated.contains("genre"))
     }
 }

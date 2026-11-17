@@ -31,6 +31,10 @@ android {
         versionName = "0.3.0"
     }
 
+    androidResources {
+        localeFilters += listOf("en", "es", "ca", "de", "fr", "it", "pt")
+    }
+
     signingConfigs {
         create("release") {
             if (signingPropertiesFile.exists()) {

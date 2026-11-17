@@ -111,7 +111,7 @@ class XtreamClient(private val client: OkHttpClient) {
                     throw PlaylistException.Html()
                 }
                 val body = response.body?.string()
-                    ?: throw PlaylistException.Unknown(IOException("Respuesta sin cuerpo"))
+                    ?: throw PlaylistException.Unknown(IOException("Response without body"))
                 val head = body.trimStart().take(16).lowercase()
                 if (head.startsWith("<!doctype") || head.startsWith("<html")) {
                     throw PlaylistException.Html()
@@ -428,7 +428,7 @@ internal fun SeriesInfoDto.toSeriesInfo(
     val info = infoObject()
     val name = info?.text("name")?.takeIf { it.isNotBlank() }
         ?: defaultName.takeIf { it.isNotBlank() }
-        ?: "Serie"
+        ?: UNNAMED_SERIES
 
     // Insertion-ordered so "first occurrence wins" is deterministic: the
     // first season key that normalises to a number owns that season, and any

@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="url_label">URL da lista</string>
+    <string name="url_placeholder">https://example.com/get.php?username=...&amp;password=...&amp;type=m3u_plus&amp;output=m3u8</string>
+    <string name="loading_cache">A carregar a lista guardada…</string>
+    <string name="refresh">Atualizar</string>
+    <string name="fullscreen">Ecrã inteiro</string>
+    <string name="exit_fullscreen">Sair do ecrã inteiro</string>
+    <string name="mute">Silenciar</string>
+    <string name="unmute">Ativar som</string>
+    <string name="player_muted">Sem som</string>
+    <string name="retry">Tentar novamente</string>
+    <string name="search_all">Pesquisar em tudo</string>
+    <string name="all_groups">Todos</string>
+    <string name="tab_live">Em direto</string>
+    <string name="tab_movies">Filmes</string>
+    <string name="tab_series">Séries</string>
+    <string name="tab_all">Tudo</string>
+    <string name="empty_playlist">Esta lista não contém canais.</string>
+    <string name="empty_search">Nenhum canal corresponde à pesquisa.</string>
+    <string name="empty_tab">Não há canais neste separador.</string>
+    <string name="back">Voltar</string>
+    <string name="tagline">A tua IPTV, simples.</string>
+    <string name="search_hint">Pesquisar canal, grupo…</string>
+    <string name="channels_count">%1$s canais</string>
+    <plurals name="warning_count">
+        <item quantity="one">%1$d aviso</item>
+        <item quantity="many">%1$d avisos</item>
+        <item quantity="other">%1$d avisos</item>
+    </plurals>
+    <string name="cancel">Cancelar</string>
+    <string name="clear">Limpar</string>
+    <string name="other">Outros</string>
+    <string name="favorites">Favoritos</string>
+    <string name="favorites_empty">Ainda não tens favoritos. Toca na estrela de um canal para o adicionar.</string>
+    <string name="add_favorite">Adicionar aos favoritos</string>
+    <string name="remove_favorite">Remover dos favoritos</string>
+    <string name="favorites_count">%1$s favoritos</string>
+
+    <!-- Xtream catalogue: poster grid and series detail -->
+    <string name="items_count">%1$s títulos</string>
+    <string name="all_categories">Todas</string>
+    <string name="layout_grid">Ver em grelha</string>
+    <string name="layout_list">Ver em lista</string>
+    <string name="catalog_search_all">A pesquisar em todos os separadores: a mostrar a lista plana de canais.</string>
+
+    <!-- Xtream catalogue: explained degradations -->
+    <string name="catalog_missing">O catálogo desta lista ainda não foi carregado; sem ele não há grelha de cartazes nem séries agrupadas.</string>
+    <string name="catalog_unavailable">Não foi possível carregar o catálogo de filmes e séries; a mostrar a lista plana.</string>
+    <string name="catalog_skipped_items">Foram ignorados %1$d itens do catálogo por terem dados inválidos.</string>
+    <string name="catalog_empty_response">O fornecedor respondeu sem dados do catálogo.</string>
+    <string name="catalog_invalid_json">O catálogo do fornecedor não era um JSON válido.</string>
+    <string name="catalog_posters_unreachable">Não é possível mostrar %1$d de %2$d capas: o servidor de imagens indicado pelo fornecedor recusa a ligação.</string>
+    <string name="catalog_unexpected_format">O catálogo do fornecedor não tinha o formato esperado.</string>
+    <string name="empty_category">Não há títulos nesta categoria.</string>
+    <string name="episode_number">Temporada %1$d · Episódio %2$d</string>
+    <string name="season_number">Temporada %1$d</string>
+    <string name="series_episodes_count">%1$s episódios</string>
+    <string name="series_loading">A carregar episódios…</string>
+    <string name="series_no_episodes">Esta série não tem episódios disponíveis.</string>
+
+    <!-- My playlists -->
+    <string name="lists_title">As minhas listas</string>
+    <plurals name="lists_count">
+        <item quantity="one">%1$s lista</item>
+        <item quantity="many">%1$s listas</item>
+        <item quantity="other">%1$s listas</item>
+    </plurals>
+    <string name="add_list">Adicionar lista</string>
+    <string name="new_list">Nova lista</string>
+    <string name="edit_list">Editar lista</string>
+    <string name="delete_list">Eliminar lista</string>
+    <string name="delete_list_title">Eliminar esta lista?</string>
+    <string name="delete_list_message">Serão eliminadas as suas definições e os canais guardados. Os favoritos não são afetados.</string>
+    <string name="delete">Eliminar</string>
+    <string name="list_loading_subtitle">A abrir a lista. Se já estava guardada, não será usada a rede.</string>
+    <string name="list_last_used">Ativa</string>
+    <string name="list_updated_at">Atualizada %1$s</string>
+    <string name="list_name_label">Nome da lista</string>
+    <string name="list_name_hint">A minha lista</string>
+    <string name="list_method_label">Como se liga</string>
+    <string name="list_form_subtitle">Dá-lhe um nome e escolhe como ligar ao teu fornecedor.</string>
+    <string name="list_privacy_help">Fica guardada apenas neste telemóvel e nunca é enviada para nenhum servidor.</string>
+    <string name="save_list">Guardar lista</string>
+    <string name="xtream_server_label">Servidor</string>
+    <string name="xtream_server_hint">http://example.com:8080</string>
+    <string name="xtream_user_label">Utilizador</string>
+    <string name="xtream_password_label">Palavra-passe</string>
+    <string name="xtream_help">Será usado %1$s/get.php?username=…&amp;password=…&amp;type=m3u_plus&amp;output=m3u8 (HLS).</string>
+    <string name="show_credentials">Mostrar credenciais</string>
+    <string name="hide_credentials">Ocultar credenciais</string>
+    <string name="error_list_name">Dá um nome à lista.</string>
+    <string name="error_list_url">O URL não é válido. Deve começar por http:// ou https:// e incluir o servidor.</string>
+    <string name="error_xtream_incomplete">Preenche o servidor, o utilizador e a palavra-passe.</string>
+    <string name="error_xtream_server_full_url">Em Servidor, indica apenas o endereço (por exemplo http://example.com:8080), sem /get.php.</string>
+
+    <!-- Catalogue: sorting -->
+    <string name="sort_cd">Ordenar. Ordem atual: %1$s</string>
+    <string name="sort_menu_title">Ordenar por</string>
+    <string name="sort_provider">Ordem do fornecedor</string>
+    <string name="sort_recent">Adicionados recentemente</string>
+    <string name="sort_release">Estreia mais recente</string>
+    <string name="sort_rating">Mais bem avaliados</string>
+    <string name="sort_az">A-Z</string>
+    <string name="sort_az_cd" tools:ignore="Typos">Alfabética, de A a Z</string>
+    <string name="sort_dir_best_first">melhor avaliação primeiro</string>
+    <string name="sort_dir_worst_first">pior avaliação primeiro</string>
+    <string name="sort_dir_newest_first">mais recentes primeiro</string>
+    <string name="sort_dir_oldest_first">mais antigos primeiro</string>
+    <string name="sort_dir_a_to_z" tools:ignore="Typos">de A a Z</string>
+    <string name="sort_dir_z_to_a">de Z a A</string>
+    <string name="sort_cd_dir">Ordenar. Ordem atual: %1$s, %2$s</string>
+    <string name="sort_item_selected_cd">%1$s, %2$s. Toca novamente para inverter a ordem</string>
+    <string name="added_on">Adicionado em %1$s</string>
+    <string name="sort_unavailable_hint">Só são mostradas as ordens para as quais esta lista tem dados.</string>
+    <string name="items_count_of">%1$s de %2$s títulos</string>
+
+    <!-- Catalogue: filters -->
+    <string name="filters">Filtros</string>
+    <plurals name="filters_cd_active">
+        <item quantity="one">Filtros, %1$d ativo</item>
+        <item quantity="many">Filtros, %1$d ativos</item>
+        <item quantity="other">Filtros, %1$d ativos</item>
+    </plurals>
+    <string name="filters_title_movies">Filtrar filmes</string>
+    <string name="filters_title_series">Filtrar séries</string>
+    <string name="filter_language">Idioma</string>
+    <string name="filter_genre">Género</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_rating">Avaliação</string>
+    <string name="filter_rating_min">Só com avaliação de 7 ou superior</string>
+    <string name="filter_rating_help">Os títulos sem avaliação ficam ocultos.</string>
+    <string name="filter_rating_chip">Avaliação ≥ 7</string>
+    <string name="filter_genre_capped">A mostrar os %1$d géneros mais frequentes.</string>
+    <string name="filters_unavailable_hint">Só são mostrados os filtros para os quais esta lista tem dados.</string>
+    <string name="filters_clear">Limpar filtros</string>
+    <plurals name="filters_show_results">
+        <item quantity="one">Mostrar %1$s título</item>
+        <item quantity="many">Mostrar %1$s títulos</item>
+        <item quantity="other">Mostrar %1$s títulos</item>
+    </plurals>
+    <string name="filter_remove_cd">Remover filtro: %1$s</string>
+    <string name="empty_filters">Nenhum título corresponde aos filtros.</string>
+    <string name="empty_search_filters">Nenhum título corresponde à pesquisa e aos filtros.</string>
+    <string name="empty_search_titles">Nenhum título corresponde à pesquisa.</string>
+    <string name="empty_tab_titles">Não há títulos neste separador.</string>
+    <string name="empty_category_action">Mostrar todas as categorias</string>
+    <string name="clear_search">Limpar pesquisa</string>
+    <string name="controls_reset">Algumas opções de ordenação ou filtro já não estão disponíveis para esta lista e foram removidas.</string>
+    <string name="catalog_outdated">Este catálogo foi guardado por uma versão anterior da aplicação. Atualiza a lista para ver todas as opções de ordenação e filtro.</string>
+
+    <!-- Languages detected in categories ("Other" reuses @string/other) -->
+    <string name="lang_es">Espanhol</string>
+    <string name="lang_latino">Latino-americano</string>
+    <string name="lang_en">Inglês</string>
+    <string name="lang_fr">Francês</string>
+    <string name="lang_de">Alemão</string>
+    <string name="lang_it">Italiano</string>
+    <string name="lang_pt">Português</string>
+    <string name="lang_pt_br">Português (Brasil)</string>
+    <string name="lang_ca">Catalão</string>
+    <string name="lang_gl">Galego</string>
+    <string name="lang_eu">Basco</string>
+    <string name="lang_ar">Árabe</string>
+    <string name="lang_tr">Turco</string>
+    <string name="lang_nl">Neerlandês</string>
+    <string name="lang_pl">Polaco</string>
+    <string name="lang_ru">Russo</string>
+    <string name="lang_ro">Romeno</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="lang_vo">Versão original</string>
+
+    <!-- Unified genres -->
+    <string name="genre_action">Ação</string>
+    <string name="genre_adventure">Aventura</string>
+    <string name="genre_animation">Animação</string>
+    <string name="genre_comedy">Comédia</string>
+    <string name="genre_crime">Crime</string>
+    <string name="genre_documentary">Documentário</string>
+    <string name="genre_drama">Drama</string>
+    <string name="genre_family">Família</string>
+    <string name="genre_fantasy">Fantasia</string>
+    <string name="genre_history">História</string>
+    <string name="genre_horror">Terror</string>
+    <string name="genre_music">Música</string>
+    <string name="genre_musical">Musical</string>
+    <string name="genre_mystery">Mistério</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_scifi">Ficção científica</string>
+    <string name="genre_tv_movie">Telefilme</string>
+    <string name="genre_thriller">Suspense</string>
+    <string name="genre_war">Guerra</string>
+    <string name="genre_politics">Política</string>
+    <string name="genre_western">Western</string>
+    <string name="genre_kids">Infantil</string>
+    <string name="genre_news">Notícias</string>
+    <string name="genre_reality">Reality show</string>
+    <string name="genre_soap">Telenovela</string>
+    <string name="genre_talk">Talk show</string>
+    <string name="genre_biography">Biografia</string>
+    <string name="genre_sport">Desporto</string>
+    <string name="genre_game_show">Concurso</string>
+    <string name="genre_food">Gastronomia</string>
+    <string name="genre_home_garden">Casa e jardim</string>
+    <string name="genre_mini_series">Minissérie</string>
+    <string name="genre_short">Curta-metragem</string>
+    <string name="genre_travel">Viagens</string>
+
+    <!-- Movie detail -->
+    <string name="movie_details">Ver detalhes</string>
+    <string name="play">Reproduzir</string>
+    <string name="movie_detail_loading">A carregar detalhes…</string>
+    <string name="movie_detail_empty">O fornecedor não tem mais informação sobre este filme.</string>
+    <string name="movie_detail_error">Não foi possível carregar os detalhes.</string>
+    <string name="movie_detail_error_generic">Verifica a ligação e tenta novamente.</string>
+    <string name="movie_detail_error_play">Ainda podes reproduzir o filme.</string>
+    <string name="movie_detail_hint">Mantém premido um filme para ver os detalhes.</string>
+    <string name="got_it">Entendido</string>
+    <string name="movie_director">Realizador: %1$s</string>
+    <string name="movie_cast">Elenco: %1$s</string>
+    <string name="duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="duration_minutes">%1$d min</string>
+    <string name="rating_cd">Avaliação de %1$s em 10</string>
+
+    <!-- Series header -->
+    <string name="series_years_range_cd">Emitida de %1$d a %2$d</string>
+    <string name="series_runtime">%1$d min por episódio</string>
+    <!-- Compact header -->
+    <string name="header_title_cd">Lista ativa: %1$s. Mudar ou adicionar lista</string>
+    <string name="header_title_cd_updated">Lista ativa: %1$s. %2$s. Mudar ou adicionar lista</string>
+    <string name="header_updated">Atualizada %1$s</string>
+    <string name="updated_when_today">hoje · %1$s</string>
+    <string name="updated_when_yesterday">ontem · %1$s</string>
+    <string name="header_never_updated">Ainda não transferida</string>
+    <string name="updated_cd_today">Atualizada hoje às %1$s</string>
+    <string name="updated_cd_yesterday">Atualizada ontem às %1$s</string>
+    <string name="updated_cd_date">Atualizada em %1$s às %2$s</string>
+    <string name="updated_cd_day">Atualizada em %1$s</string>
+    <string name="search">Pesquisar</string>
+    <string name="search_close">Fechar pesquisa</string>
+    <string name="search_hint_titles">Pesquisar título…</string>
+    <string name="more_options">Mais opções</string>
+    <string name="refreshing_cd">A atualizar a lista…</string>
+    <string name="switch_list">Mudar de lista</string>
+    <string name="back_to_active_list">Voltar à lista ativa</string>
+    <string name="group_chip">Grupo: %1$s</string>
+    <string name="group_chip_cd">Grupo: %1$s. Escolher grupo</string>
+    <string name="group_clear_cd">Remover grupo %1$s</string>
+    <string name="groups_sheet_title">Grupos (%1$s)</string>
+    <string name="groups_filter_hint">Filtrar grupos</string>
+    <string name="groups_all">Todos os grupos</string>
+    <string name="groups_none_match">Nenhum grupo corresponde a “%1$s”.</string>
+    <string name="category_chip">Categoria</string>
+    <string name="category_chip_cd">Categoria: %1$s. Escolher categoria</string>
+    <string name="category_clear_cd">Remover categoria %1$s</string>
+    <string name="categories_sheet_title">Categorias (%1$s)</string>
+    <string name="categories_filter_hint">Filtrar categorias</string>
+    <string name="categories_all">Todas as categorias</string>
+    <string name="categories_none_match">Nenhuma categoria corresponde a “%1$s”.</string>
+    <string name="picker_filter_clear">Limpar filtro</string>
+    <string name="channels_count_of">%1$s de %2$s canais</string>
+    <string name="empty_group_action">Mostrar todos os grupos</string>
+
+    <!-- Playlist loading errors -->
+    <string name="err_invalid_url">O URL não é válido. Deve começar por http:// ou https://.</string>
+    <string name="err_http_auth">O fornecedor rejeitou a lista (HTTP %1$d). Verifica o utilizador/palavra-passe ou se a tua subscrição está ativa.</string>
+    <string name="err_http_not_found">O URL não existe (HTTP 404). Verifica se é o endereço completo da lista.</string>
+    <string name="err_http_server">O servidor do fornecedor falhou (HTTP %1$d). Tenta novamente mais tarde.</string>
+    <string name="err_http_other">O fornecedor respondeu com HTTP %1$d.</string>
+    <string name="err_html">O URL devolveu uma página web, não uma lista M3U. Verifica a ligação e se a tua subscrição está ativa.</string>
+    <string name="err_empty">A lista foi transferida mas não contém canais.</string>
+    <string name="err_malformed">O fornecedor devolveu dados inválidos. Tenta atualizar a lista.</string>
+    <string name="err_too_large">A lista tem %1$d MB e o limite é de %2$d MB.</string>
+    <string name="err_out_of_memory">O dispositivo ficou sem memória ao processar a lista. Fecha outras aplicações e tenta novamente.</string>
+    <string name="err_timeout">A lista demorou demasiado a responder. Verifica a ligação ou o URL.</string>
+    <string name="err_unknown_host">Não foi possível encontrar o servidor do fornecedor. Verifica o URL e a ligação.</string>
+    <string name="err_connect">Não foi possível ligar ao fornecedor. Verifica a ligação.</string>
+    <string name="err_load_failed">Não foi possível carregar a lista.</string>
+    <string name="series_load_error">Não foi possível carregar os episódios. Verifica a ligação e tenta novamente.</string>
+
+    <!-- Playback errors -->
+    <string name="player_err_auth">O fornecedor rejeitou o canal (HTTP %1$d). Pode exigir outro User-Agent ou uma subscrição ativa.</string>
+    <string name="player_err_not_found">O canal já não existe no fornecedor (HTTP 404). Atualiza a lista.</string>
+    <string name="player_err_server">O servidor do fornecedor falhou (HTTP %1$d). Tenta novamente mais tarde.</string>
+    <string name="player_err_http_other">O fornecedor respondeu com HTTP %1$d.</string>
+    <string name="player_err_timeout">O canal demorou demasiado a responder. Verifica a ligação.</string>
+    <string name="player_err_no_connection">Não há ligação ao fornecedor do canal.</string>
+    <string name="player_err_format">O fornecedor devolveu um formato que não pode ser reproduzido.</string>
+    <string name="player_err_no_video">O fornecedor não enviou vídeo: respondeu com uma página ou um formato que não pode ser reproduzido. Costuma ser um problema do servidor dele; tenta mais tarde ou com outro título.</string>
+    <string name="player_err_codec">Este telemóvel não consegue descodificar este canal (codec não suportado). Experimenta outra variante.</string>
+    <string name="player_err_generic">Não foi possível reproduzir o canal (%1$s).</string>
+
+    <!-- Playlist parsing warnings -->
+    <string name="warning_url_without_extinf">Linha %1$d: URL sem #EXTINF, ignorado.</string>
+    <string name="warning_invalid_url">Linha %1$d: URL inválido, ignorado.</string>
+
+    <!-- Download progress, sizes and fallback names -->
+    <string name="loading_download_progress">A transferir %1$s de %2$s · %3$s canais</string>
+    <string name="loading_download_progress_unknown">A transferir %1$s · %2$s canais</string>
+    <string name="size_mb">%1$s MB</string>
+    <string name="size_kb">%1$s KB</string>
+    <string name="unnamed_channel">Canal sem nome</string>
+    <string name="unnamed_title">Sem título</string>
+    <string name="series_fallback">Série</string>
+</resources>

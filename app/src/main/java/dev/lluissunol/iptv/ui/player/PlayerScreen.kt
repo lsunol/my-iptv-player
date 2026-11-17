@@ -1,5 +1,7 @@
 package dev.lluissunol.iptv.ui.player
 
+import dev.lluissunol.iptv.i18n.UiText
+import dev.lluissunol.iptv.i18n.asString
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -72,6 +74,7 @@ import dev.lluissunol.iptv.R
 import kotlinx.coroutines.delay
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.player.userMessage
+import dev.lluissunol.iptv.ui.playlist.localizedName
 
 private const val ORIENTATION_RELEASE_DELAY_MS = 700L
 
@@ -94,7 +97,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
     val configuration = LocalConfiguration.current
-    var playbackError by remember { mutableStateOf<String?>(null) }
+    var playbackError by remember { mutableStateOf<UiText?>(null) }
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
 
     val player = remember(channel.id) {
@@ -220,7 +223,7 @@ fun PlayerScreen(
                     title = {
                         Column {
                             Text(
-                                text = channel.name,
+                                text = localizedName(channel.name),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -328,7 +331,7 @@ fun PlayerScreen(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = message,
+                            text = message.asString(),
                             color = Color.White,
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodyLarge

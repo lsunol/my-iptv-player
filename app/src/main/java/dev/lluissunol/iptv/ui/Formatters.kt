@@ -15,11 +15,39 @@ internal fun formatCompact(value: Int): String = when {
 internal fun formatNumber(value: Int): String =
     NumberFormat.getIntegerInstance(Locale.getDefault()).format(value)
 
-internal fun shortDay(epochMs: Long): String =
-    SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(epochMs))
+/**
+ * Resolves the locale's own ordering/separators for a date skeleton such as
+ * `ddMM`. Injectable because `android.text.format.DateFormat` is not usable in
+ * plain JVM unit tests.
+ */
+internal fun interface DatePatterns {
+    fun best(locale: Locale, skeleton: String): String
+}
 
-internal fun shortDate(epochMs: Long): String =
-    SimpleDateFormat("dd/MM · HH:mm", Locale.getDefault()).format(Date(epochMs))
+internal object AndroidDatePatterns : DatePatterns {
+    override fun best(locale: Locale, skeleton: String): String =
+        android.text.format.DateFormat.getBestDateTimePattern(locale, skeleton)
+}
+
+private fun timeSkeleton(is24Hour: Boolean) = if (is24Hour) "Hm" else "hm"
+
+private fun format(pattern: String, locale: Locale, epochMs: Long): String =
+    SimpleDateFormat(pattern, locale).format(Date(epochMs))
+
+internal fun shortDay(epochMs: Long, patterns: DatePatterns = AndroidDatePatterns): String {
+    val locale = Locale.getDefault()
+    return format(patterns.best(locale, "ddMMyyyy"), locale, epochMs)
+}
+
+internal fun shortDate(
+    epochMs: Long,
+    is24Hour: Boolean = true,
+    patterns: DatePatterns = AndroidDatePatterns
+): String {
+    val locale = Locale.getDefault()
+    val pattern = patterns.best(locale, "ddMM") + " · " + patterns.best(locale, timeSkeleton(is24Hour))
+    return format(pattern, locale, epochMs)
+}
 
 /** A 0-10 rating with one decimal and the locale's separator; `7.0` reads `7`. */
 internal fun formatRating10(value: Double): String {
@@ -55,9 +83,9 @@ internal enum class UpdatedDay { TODAY, YESTERDAY, DATE, OLD_YEAR }
 
 internal data class UpdatedWhen(
     val day: UpdatedDay,
-    /** `HH:mm` */
+    /** Time of day in the locale's pattern, 24-hour or not as the device is set. */
     val time: String,
-    /** `dd/MM`, or `dd/MM/yyyy` for [UpdatedDay.OLD_YEAR] */
+    /** Day and month in the locale's order, plus the year for [UpdatedDay.OLD_YEAR]. */
     val date: String
 )
 
@@ -66,7 +94,9 @@ internal fun updatedWhen(
     epochMs: Long,
     nowMs: Long,
     locale: Locale = Locale.getDefault(),
-    zone: java.util.TimeZone = java.util.TimeZone.getDefault()
+    zone: java.util.TimeZone = java.util.TimeZone.getDefault(),
+    is24Hour: Boolean = true,
+    patterns: DatePatterns = AndroidDatePatterns
 ): UpdatedWhen {
     fun cal(ms: Long) = java.util.Calendar.getInstance(zone, locale).apply { timeInMillis = ms }
     val then = cal(epochMs)
@@ -85,8 +115,8 @@ internal fun updatedWhen(
     fun fmt(pattern: String) = SimpleDateFormat(pattern, locale).apply { timeZone = zone }.format(Date(epochMs))
     return UpdatedWhen(
         day = day,
-        time = fmt("HH:mm"),
-        date = fmt(if (day == UpdatedDay.OLD_YEAR) "dd/MM/yyyy" else "dd/MM")
+        time = fmt(patterns.best(locale, timeSkeleton(is24Hour))),
+        date = fmt(patterns.best(locale, if (day == UpdatedDay.OLD_YEAR) "ddMMyyyy" else "ddMM"))
     )
 }
 

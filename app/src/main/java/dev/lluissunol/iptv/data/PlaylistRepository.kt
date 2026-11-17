@@ -1,5 +1,6 @@
 package dev.lluissunol.iptv.data
 
+import dev.lluissunol.iptv.R
 import dev.lluissunol.iptv.data.model.CatalogWarning
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Playlist
@@ -11,6 +12,7 @@ import dev.lluissunol.iptv.data.model.VodCatalog
 import dev.lluissunol.iptv.data.model.MovieInfo
 import dev.lluissunol.iptv.data.model.buildVodCatalog
 import dev.lluissunol.iptv.data.model.buildXtreamStreamUrl
+import dev.lluissunol.iptv.i18n.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -34,46 +36,43 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.CharacterCodingException
 
 sealed class PlaylistException(message: String, cause: Throwable? = null) : Exception(message, cause) {
-    class InvalidUrl : PlaylistException("URL no válida")
+    class InvalidUrl : PlaylistException("Invalid URL")
     class Http(val code: Int) : PlaylistException("HTTP $code")
-    class Html : PlaylistException("HTML en lugar de una lista")
-    class Empty : PlaylistException("Lista vacía")
-    class Malformed(cause: Throwable? = null) : PlaylistException("Respuesta no válida", cause)
-    class TooLarge(val bytes: Long) : PlaylistException("Lista demasiado grande")
-    class OutOfMemory : PlaylistException("Sin memoria al procesar la lista")
-    class Network(cause: Throwable) : PlaylistException("Error de red", cause)
-    class Unknown(cause: Throwable) : PlaylistException("Error desconocido", cause)
+    class Html : PlaylistException("HTML instead of a playlist")
+    class Empty : PlaylistException("Empty playlist")
+    class Malformed(cause: Throwable? = null) : PlaylistException("Invalid response", cause)
+    class TooLarge(val bytes: Long) : PlaylistException("Playlist too large")
+    class OutOfMemory : PlaylistException("Out of memory while processing the playlist")
+    class Network(cause: Throwable) : PlaylistException("Network error", cause)
+    class Unknown(cause: Throwable) : PlaylistException("Unknown error", cause)
 }
 
-fun PlaylistException.userMessage(): String = when (this) {
-    is PlaylistException.InvalidUrl ->
-        "La URL no es válida. Debe empezar por http:// o https://."
+/**
+ * The text to show for this failure, unresolved (the data layer has no
+ * `Context`). Arguments are only numbers: never a URL or credential.
+ */
+fun PlaylistException.userMessage(): UiText = when (this) {
+    is PlaylistException.InvalidUrl -> UiText.of(R.string.err_invalid_url)
     is PlaylistException.Http -> when (code) {
-        401, 403 -> "El proveedor rechazó la lista (HTTP $code). Comprueba usuario/contraseña o que la suscripción esté activa."
-        404 -> "La URL no existe (HTTP 404). Revisa que sea la dirección completa de la lista."
-        in 500..599 -> "El servidor del proveedor falló (HTTP $code). Inténtalo más tarde."
-        else -> "El proveedor respondió HTTP $code."
+        401, 403 -> UiText.of(R.string.err_http_auth, code)
+        404 -> UiText.of(R.string.err_http_not_found)
+        in 500..599 -> UiText.of(R.string.err_http_server, code)
+        else -> UiText.of(R.string.err_http_other, code)
     }
-    is PlaylistException.Html ->
-        "La URL devolvió una página web, no una lista M3U. Comprueba el enlace y que la suscripción esté activa."
-    is PlaylistException.Empty ->
-        "La lista se descargó pero no contiene canales."
-    is PlaylistException.Malformed ->
-        "El proveedor devolvió datos no válidos. Prueba a actualizar la lista."
+    is PlaylistException.Html -> UiText.of(R.string.err_html)
+    is PlaylistException.Empty -> UiText.of(R.string.err_empty)
+    is PlaylistException.Malformed -> UiText.of(R.string.err_malformed)
     is PlaylistException.TooLarge ->
-        "La lista ocupa ${bytes / 1_000_000} MB y el limite es " +
-            "${PlaylistRepository.MAX_BYTES / 1_000_000} MB."
-    is PlaylistException.OutOfMemory ->
-        "El dispositivo se quedo sin memoria al procesar la lista. " +
-            "Cierra otras aplicaciones e intentalo de nuevo."
-    is PlaylistException.Network -> when (val cause = cause) {
-        is SocketTimeoutException -> "La lista tardó demasiado en responder. Comprueba tu conexión o la URL."
-        is UnknownHostException -> "No se pudo encontrar el servidor del proveedor. Comprueba la URL y tu conexión."
-        else -> "No se pudo conectar con el proveedor. Comprueba tu conexión."
+        UiText.of(R.string.err_too_large, bytes / 1_000_000, PlaylistRepository.MAX_BYTES / 1_000_000)
+    is PlaylistException.OutOfMemory -> UiText.of(R.string.err_out_of_memory)
+    is PlaylistException.Network -> when (cause) {
+        is SocketTimeoutException -> UiText.of(R.string.err_timeout)
+        is UnknownHostException -> UiText.of(R.string.err_unknown_host)
+        else -> UiText.of(R.string.err_connect)
     }
     // Never project an arbitrary exception message: the URL (and its
     // credentials) may be part of it. The cause stays on the exception for logs.
-    is PlaylistException.Unknown -> "No se pudo cargar la lista."
+    is PlaylistException.Unknown -> UiText.of(R.string.err_load_failed)
 }
 
 /**
@@ -196,7 +195,7 @@ class PlaylistRepository(
                 }
 
                 val body = response.body
-                    ?: throw PlaylistException.Unknown(IOException("Respuesta sin cuerpo"))
+                    ?: throw PlaylistException.Unknown(IOException("Response without body"))
                 val total = body.contentLength()
                 var size = 0L
                 body.byteStream().use { input ->
@@ -521,7 +520,7 @@ class PlaylistRepository(
         val info = withContext(Dispatchers.Default) {
             dto.toSeriesInfo(
                 seriesId = seriesId,
-                defaultName = "Serie $seriesId",
+                defaultName = UNNAMED_SERIES,
                 matcher = matcher,
                 fallbackUrl = fallback,
                 serverBase = config.server

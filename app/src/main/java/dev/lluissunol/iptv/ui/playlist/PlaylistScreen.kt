@@ -1,5 +1,6 @@
 package dev.lluissunol.iptv.ui.playlist
 
+import dev.lluissunol.iptv.i18n.asString
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -93,6 +94,9 @@ import dev.lluissunol.iptv.data.PickerEntry
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import dev.lluissunol.iptv.data.UNNAMED_CHANNEL
+import dev.lluissunol.iptv.data.UNNAMED_SERIES
+import dev.lluissunol.iptv.data.UNNAMED_TITLE
 import dev.lluissunol.iptv.data.cleanDisplayName
 import dev.lluissunol.iptv.data.model.Channel
 import dev.lluissunol.iptv.data.model.Playlist
@@ -236,7 +240,7 @@ private fun ListLoadPane(
         }
 
         state.error?.let { message ->
-            ErrorCard(error = message, onRetry = onRetry, onDismiss = onClearError)
+            ErrorCard(error = message.asString(), onRetry = onRetry, onDismiss = onClearError)
         }
 
         Row(
@@ -260,9 +264,18 @@ private fun LoadingProgress(state: UiState) {
     val text = when {
         state.isReadingCache -> stringResource(R.string.loading_cache)
         state.totalBytes > 0 ->
-            "Descargando ${formatBytes(state.progressBytes)} de ${formatBytes(state.totalBytes)} · ${state.parsedEntries} canales"
+            stringResource(
+                R.string.loading_download_progress,
+                formatBytes(state.progressBytes),
+                formatBytes(state.totalBytes),
+                formatNumber(state.parsedEntries)
+            )
         else ->
-            "Descargando ${formatBytes(state.progressBytes)} · ${state.parsedEntries} canales"
+            stringResource(
+                R.string.loading_download_progress_unknown,
+                formatBytes(state.progressBytes),
+                formatNumber(state.parsedEntries)
+            )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -436,7 +449,7 @@ private fun PlaylistContent(
         )
 
         state.error?.let { message ->
-            ErrorBanner(message = message, onRetry = onRetry)
+            ErrorBanner(message = message.asString(), onRetry = onRetry)
         }
 
         // Degradation and cross-type-search notices: one quiet line, so the
@@ -1202,18 +1215,42 @@ private fun typeLabel(type: SourceType): String = when (type) {
     SourceType.OTHER -> stringResource(R.string.other)
 }
 
-internal fun cleanChannelName(name: String): String = cleanDisplayName(name)
+/** The stored name with the "no name" placeholders shown in the current language. */
+@Composable
+internal fun localizedName(name: String): String = when (name) {
+    UNNAMED_CHANNEL -> stringResource(R.string.unnamed_channel)
+    UNNAMED_TITLE -> stringResource(R.string.unnamed_title)
+    UNNAMED_SERIES -> stringResource(R.string.series_fallback)
+    else -> name
+}
+
+@Composable
+internal fun cleanChannelName(name: String): String {
+    val localized = localizedName(name)
+    return if (localized === name) cleanDisplayName(name) else localized
+}
 
 internal fun logoInitial(name: String): String {
-    val cleaned = cleanChannelName(name)
+    if (name == UNNAMED_CHANNEL || name == UNNAMED_TITLE || name == UNNAMED_SERIES) return "?"
+    val cleaned = cleanDisplayName(name)
     return cleaned.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
 }
 
+@Composable
 private fun formatBytes(bytes: Long): String {
-    if (bytes <= 0) return "0 MB"
+    val megabytes = megabyteText(bytes)
+    return if (megabytes != null) {
+        stringResource(R.string.size_mb, megabytes)
+    } else {
+        stringResource(R.string.size_kb, formatNumber((bytes / 1000).toInt()))
+    }
+}
+
+/** `12.3` for 1 MB or more (and `0` for nothing), or null when KB reads better. */
+private fun megabyteText(bytes: Long): String? {
+    if (bytes <= 0) return "0"
     val mb = bytes / 1_000_000.0
-    return if (mb >= 1.0) String.format(Locale.getDefault(), "%.1f MB", mb)
-    else "${bytes / 1000} KB"
+    return if (mb >= 1.0) String.format(Locale.getDefault(), "%.1f", mb) else null
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -1,5 +1,7 @@
 package dev.lluissunol.iptv.ui.movie
 
+import dev.lluissunol.iptv.i18n.UiText
+import dev.lluissunol.iptv.i18n.asString
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -63,7 +65,7 @@ fun MovieDetailScreen(
     movie: VodItem,
     info: MovieInfo?,
     isLoading: Boolean,
-    error: String?,
+    error: UiText?,
     isFavorite: Boolean,
     onBack: () -> Unit,
     onPlay: () -> Unit,
@@ -135,7 +137,7 @@ fun MovieDetailScreen(
                 // The reason is the mapped, specific message; the tail tells the
                 // user playback is unaffected.
                 DetailErrorBanner(
-                    message = stringResource(R.string.movie_detail_error) + " " + reason + "\n" +
+                    message = stringResource(R.string.movie_detail_error) + " " + reason.asString() + "\n" +
                         stringResource(R.string.movie_detail_error_play),
                     onRetry = onRetry,
                     onDismiss = onClearError,

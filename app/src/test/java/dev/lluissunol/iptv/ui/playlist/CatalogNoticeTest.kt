@@ -334,8 +334,8 @@ class CatalogNoticeTest {
             assertTrue("$name is empty", value.isNotBlank())
         }
         // The action reuses the existing key instead of adding a second
-        // "Actualizar" string.
-        assertTrue(strings.contains("<string name=\"refresh\">Actualizar</string>"))
+        // "Refresh" string.
+        assertTrue(strings.contains("<string name=\"refresh\">Refresh</string>"))
         assertEquals(
             1,
             Regex("""<string name="refresh">""").findAll(strings).count()

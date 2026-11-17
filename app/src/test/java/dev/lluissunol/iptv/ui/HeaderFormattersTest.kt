@@ -12,7 +12,26 @@ class HeaderFormattersTest {
     private fun at(y: Int, m: Int, d: Int, h: Int, min: Int): Long =
         Calendar.getInstance(zone).apply { clear(); set(y, m - 1, d, h, min) }.timeInMillis
 
-    private fun whenOf(then: Long, now: Long) = updatedWhen(then, now, Locale.US, zone)
+    private val patterns = DatePatterns { _, skeleton ->
+        when (skeleton) {
+            "ddMM" -> "dd/MM"
+            "ddMMyyyy" -> "dd/MM/yyyy"
+            "Hm" -> "HH:mm"
+            else -> "h:mm a"
+        }
+    }
+
+    private fun whenOf(then: Long, now: Long, is24Hour: Boolean = true) =
+        updatedWhen(then, now, Locale.US, zone, is24Hour, patterns)
+
+    @Test
+    fun patternsComeFromTheLocaleAndTheClockSetting() {
+        val us = DatePatterns { _, skeleton -> if (skeleton == "ddMM") "MM/dd" else "h:mm a" }
+        val r = updatedWhen(at(2026, 3, 5, 18, 7), at(2026, 11, 16, 10, 0), Locale.US, zone, false, us)
+        assertEquals("03/05", r.date)
+        assertEquals("6:07 PM", r.time)
+        assertEquals("6:07 PM", whenOf(at(2026, 3, 5, 18, 7), at(2026, 3, 5, 20, 0), false).time)
+    }
 
     @Test
     fun today() {
@@ -55,10 +74,10 @@ class HeaderFormattersTest {
             clear(); set(2026, 10, 15, 23, 30)
         }.timeInMillis
         val now = at(2026, 11, 16, 12, 0)
-        assertEquals(UpdatedDay.TODAY, updatedWhen(then, now, Locale.US, zone).day)
+        assertEquals(UpdatedDay.TODAY, updatedWhen(then, now, Locale.US, zone, true, patterns).day)
         assertEquals(
             UpdatedDay.YESTERDAY,
-            updatedWhen(then, now, Locale.US, TimeZone.getTimeZone("UTC")).day
+            updatedWhen(then, now, Locale.US, TimeZone.getTimeZone("UTC"), true, patterns).day
         )
     }
 

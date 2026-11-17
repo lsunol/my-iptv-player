@@ -62,7 +62,10 @@ class PlaylistParserReaderTest {
         assertEquals("http://host/lists/canal.m3u8", fromReader.channels[3].url)
         // Warnings keep their line numbers through the reader path.
         assertEquals(1, fromReader.warnings.size)
-        assertEquals("Línea 15: URL sin #EXTINF, ignorada.", fromReader.warnings.single())
+        assertEquals(
+            dev.lluissunol.iptv.i18n.UiText.of(dev.lluissunol.iptv.R.string.warning_url_without_extinf, 15),
+            fromReader.warnings.single()
+        )
     }
 
     @Test

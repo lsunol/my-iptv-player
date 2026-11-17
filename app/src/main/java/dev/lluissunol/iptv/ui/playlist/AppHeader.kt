@@ -46,6 +46,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -145,7 +146,13 @@ internal fun AppHeader(
             val totalWidth = maxWidth
             val hasPlaylist = state.playlist != null
             val updated = state.lastUpdated?.let {
-                updatedTexts(updatedWhen(it, System.currentTimeMillis()))
+                updatedTexts(
+                    updatedWhen(
+                        it,
+                        System.currentTimeMillis(),
+                        is24Hour = android.text.format.DateFormat.is24HourFormat(LocalContext.current)
+                    )
+                )
             }
             val subtitleStyle = MaterialTheme.typography.labelSmall
             val measurer = rememberTextMeasurer()

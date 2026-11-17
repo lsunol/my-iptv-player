@@ -1,38 +1,44 @@
 package dev.lluissunol.iptv.player
 
 import androidx.media3.common.PlaybackException
+import dev.lluissunol.iptv.R
+import dev.lluissunol.iptv.i18n.UiText
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 
 @androidx.annotation.OptIn(UnstableApi::class)
-fun PlaybackException.userMessage(): String {
-    val http = findHttpCause(this)
-    if (http != null) {
-        return when (http.responseCode) {
-            401, 403 -> "El proveedor rechazó el canal (HTTP ${http.responseCode}). Puede requerir otro User-Agent o que la suscripción esté activa."
-            404 -> "El canal ya no existe en el proveedor (HTTP 404). Actualiza la lista."
-            in 500..599 -> "El servidor del proveedor falló (HTTP ${http.responseCode}). Inténtalo más tarde."
-            else -> "El proveedor respondió HTTP ${http.responseCode}."
+fun PlaybackException.userMessage(): UiText =
+    playbackMessage(errorCode, errorCodeName, findHttpCause(this)?.responseCode)
+
+/** Pure mapping, kept apart from [PlaybackException] so it runs in JVM unit tests. */
+internal fun playbackMessage(errorCode: Int, errorCodeName: String, httpCode: Int?): UiText {
+    if (httpCode != null) {
+        val code = httpCode
+        return when (code) {
+            401, 403 -> UiText.of(R.string.player_err_auth, code)
+            404 -> UiText.of(R.string.player_err_not_found)
+            in 500..599 -> UiText.of(R.string.player_err_server, code)
+            else -> UiText.of(R.string.player_err_http_other, code)
         }
     }
 
     return when (errorCode) {
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-            "El canal tardó demasiado en responder. Comprueba tu conexión."
+            UiText.of(R.string.player_err_timeout)
         PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
-            "No hay conexión con el proveedor del canal."
+            UiText.of(R.string.player_err_no_connection)
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
-            "El proveedor devolvió un formato que no se puede reproducir."
+            UiText.of(R.string.player_err_format)
         // Seen on a real panel: the VOD redirect answers an HTML "Server
         // Error" page (with a 2xx status), so the extractor finds no video.
         PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
         PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED ->
-            "El proveedor no envió vídeo: respondió con una página o un formato que no se puede reproducir. Suele ser un fallo de su servidor; prueba más tarde u otro título."
+            UiText.of(R.string.player_err_no_video)
         PlaybackException.ERROR_CODE_DECODING_FAILED ->
-            "El móvil no puede decodificar este canal (códec no soportado). Prueba otra variante."
+            UiText.of(R.string.player_err_codec)
         else ->
-            "No se pudo reproducir el canal (${errorCodeName})."
+            UiText.of(R.string.player_err_generic, errorCodeName)
     }
 }
 
