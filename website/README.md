@@ -99,10 +99,10 @@ adb shell am broadcast -a com.android.systemui.demo -e command exit
 Opcional, para que pesen menos: `magick hero.png -strip -quality 85 hero.webp`
 (y cambia la extensión en `index.html`).
 
-## Pendiente de publicar
+## Publicación
 
-1. Settings → Pages → Source: **GitHub Actions**.
-2. Dominio propio: subdominio por decidir (no `iptv.`). En Cloudflare, un CNAME
-   `<sub>` → `lsunol.github.io` en *DNS only*, y verificar el dominio en GitHub.
-3. Cuando haya dominio, poner la URL absoluta en `og:image` de `index.html`
-   (algunas redes no aceptan rutas relativas).
+La web está publicada en [openiptv.lluissunol.dev](https://openiptv.lluissunol.dev/)
+mediante GitHub Pages y el workflow indicado arriba.
+
+Pendiente: forzar la redirección de HTTP a HTTPS y usar una URL absoluta en
+`og:image` de `index.html` (algunas redes no aceptan rutas relativas).

@@ -559,44 +559,29 @@ Read the matching skill before touching that area. Project skills live in
   a force-stop and relaunch (the new track session was created already muted).
   Screenshots: `captures/player-muted.png`, `captures/player-fullscreen-muted.png`.
   Not verified on a physical phone; the DataStore write-failure path is untested.
-- **2026-11-15 — series covers, emulator (API 36)**: root cause of "series
-  show no poster" on the real Xtream account is the provider's data, not the
-  app. `get_series` (2,351 series): 2,103 `cover` URLs point at two private Plex
-  `:32400` hosts that refuse TCP connections (from the PC and from the emulator
-  via `toybox nc`), 145 are a PHP-serialized relative path
-  (`s:308:/images/...`) that the panel answers with 404, 102 are
-  `image.tmdb.org` and load. `get_series_info` (30 series sampled) repeats the
-  same Plex host for the cover, the seasons and all 357 episode `movie_image`s;
-  the M3U's `tvg-logo` too. Movies are 100% `image.tmdb.org` and load. No
-  third-party metadata service is used to fill the gap (licence and privacy
-  rules). The app now normalizes artwork URLs, short-circuits refused image
-  hosts for 5 min, and shows "2103 de 2351 portadas no se pueden mostrar…" on
-  the Series tab — the count matched the server-side analysis exactly. A
-  TMDB cover ("Un caballero en Moscú") rendered in the grid. A local fake panel
-  (`scripts/fake-xtream-artwork.mjs`, served at `10.0.2.2:8787`) proved the
-  PHP-serialized, root-relative and absolute covers render, a refused host
-  falls back to the initial with "1 de 5 portadas…", and the series detail
-  shows the `s:NN:` cover from `get_series_info`. 0 `FATAL EXCEPTION`.
-  Screenshots: `captures/series-covers/`. Not verified on a physical phone.
+- **2026-11-15 — series covers, emulator (API 36)**: unavailable artwork can
+  come from refused image hosts or malformed provider paths, not the app. The
+  app normalizes artwork URLs, short-circuits refused image hosts for 5 min, and
+  reports unavailable covers. No third-party metadata service fills the gap.
+  A local fake panel (`scripts/fake-xtream-artwork.mjs`, served at
+  `10.0.2.2:8787`) proved that PHP-serialized, root-relative and absolute covers
+  render, a refused host falls back to the initial with a warning, and series
+  detail shows the `s:NN:` cover from `get_series_info`. 0 `FATAL EXCEPTION`.
+  Not verified on a physical phone.
 
 - **2026-11-16 — catalogue sort/filter/detail, emulator (API 36)**: built by
   agents (ui-designer spec -> android-architect plan + critique -> android-dev
   -> qa-reviewer + ui-designer cross-review -> fixes -> android-emulator
   evidence -> qa-reviewer gate: PASS with warnings). 238 unit tests pass,
   including measured / rich / bare / malformed panel fixtures and an old-cache
-  decode. On the real account: "Añadidas recientemente" top 5 equals the
-  `added`-desc order computed independently from `get_vod_streams`; series
-  genre "Comedia" shows 630, equal to an independent Comedy∪Comedia count;
-  "Estreno más reciente" is not offered (no `releaseDate` there); Breaking Bad
-  header shows "2008 – 2013". With `scripts/fake-xtream-panel.mjs`: `rich`
-  offers and sorts by release date, `bare` offers only provider order and A-Z,
-  `malformed` loads 1,398/1,400 titles and hides sorts below 50% coverage.
-  Live channels still play. **Real-account VOD playback fails at the
-  provider**: the movie URL redirects to an `.mp4` endpoint that answers an
-  HTML "Server Error" page (status 206), so Media3 reports
-  `PARSING_CONTAINER_UNSUPPORTED`; the message is now actionable. Not verified:
-  physical phone, rotation, TalkBack, 2x font, heap with 100k titles.
-  Screenshots: `captures/sort-filter/` (contain the real catalogue: keep private).
+  decode. Sort order, genre filtering and missing-date handling were checked
+  against catalogue data. With `scripts/fake-xtream-panel.mjs`: `rich` offers
+  and sorts by release date, `bare` offers only provider order and A-Z,
+  `malformed` loads 1,398/1,400 synthetic titles and hides sorts below 50%
+  coverage. Live playback was also checked. A VOD endpoint returning HTML in
+  place of video produced Media3's `PARSING_CONTAINER_UNSUPPORTED`; the message
+  is now actionable. Not verified: physical phone, rotation, TalkBack, 2x font,
+  heap with 100k titles.
 
 ## Known traps
 

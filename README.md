@@ -18,8 +18,8 @@ https://github.com/lsunol/my-iptv-player/releases/latest
 
 Every release is signed with the project release key, so newer versions install
 over older ones, and each release lists the SHA-256 of its APK so you can verify
-what you downloaded. There is no signed release yet: until the first one is
-published, build from source with the development instructions below.
+what you downloaded. The latest release is available at the link above; you can
+also build from source with the development instructions below.
 
 Do **not** distribute `app-debug.apk`. It is signed with the public Android
 debug key, so anyone can forge an "update" for it, and it cannot be upgraded in
